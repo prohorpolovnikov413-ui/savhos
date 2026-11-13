@@ -1,4 +1,16 @@
-const C='zavhoz-v13d';const A=['./','index.html','style.css','game.js','manifest.webmanifest',"img/cafe.webp","img/corridor.webp","img/exterior.webp","img/hall.webp","img/hall_empty.webp","img/icon-180.png","img/icon-192.png","img/icon-512.png","img/office.webp","img/panel.webp","img/sunday.webp","img/tap.webp","img/church1.webp","img/church2.webp","img/church3.webp","img/church4.webp","img/church5.webp","img/church6.webp","img/church7.webp","img/church8.webp","img/church9.webp","img/church10.webp","img/b_prayer.webp","img/b_youthc.webp","img/b_school.webp","img/b_hall.webp","img/b_conf.webp","img/b_camp.webp","audio/hymn-main.m4a","audio/hymn-main.mp3","audio/hymn-xmas.m4a","audio/hymn-xmas.mp3","audio/hymn-easter.m4a","audio/hymn-easter.mp3","audio/tap.m4a","audio/tap.mp3"];
+const C='zavhoz-v13f';const A=['./','index.html','style.css','game.js','manifest.webmanifest',"img/cafe.webp","img/corridor.webp","img/exterior.webp","img/hall.webp","img/hall_empty.webp","img/icon-180.png","img/icon-192.png","img/icon-512.png","img/office.webp","img/panel.webp","img/sunday.webp","img/tap.webp","img/church1.webp","img/church2.webp","img/church3.webp","img/church4.webp","img/church5.webp","img/church6.webp","img/church7.webp","img/church8.webp","img/church9.webp","img/church10.webp","img/b_prayer.webp","img/b_youthc.webp","img/b_school.webp","img/b_hall.webp","img/b_conf.webp","img/b_camp.webp","audio/hymn-main.m4a","audio/hymn-main.mp3","audio/hymn-xmas.m4a","audio/hymn-xmas.mp3","audio/hymn-easter.m4a","audio/hymn-easter.mp3","audio/tap.m4a","audio/tap.mp3"];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(A)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
-self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const img=/\.(webp|png)$/.test(new URL(e.request.url).pathname);const put=n=>{if(n&&n.ok){const cp=n.clone();caches.open(C).then(c=>c.put(e.request,cp))}return n};e.respondWith(img?caches.match(e.request).then(r=>r||fetch(e.request).then(put)):fetch(e.request).then(put).catch(()=>caches.match(e.request)))});
+self.addEventListener('fetch',e=>{
+  if(e.request.method!=='GET')return;
+  const url=new URL(e.request.url);
+  const same=url.origin===self.location.origin;
+  // Never cache API, other origins, or URLs with query strings (invite links, /me, /top)
+  if(!same||url.search){
+    e.respondWith(fetch(e.request,{cache:'no-store'}));
+    return;
+  }
+  const img=/\.(webp|png)$/.test(url.pathname);
+  const put=n=>{if(n&&n.ok){const cp=n.clone();caches.open(C).then(c=>c.put(e.request,cp))}return n};
+  e.respondWith(img?caches.match(e.request).then(r=>r||fetch(e.request).then(put)):fetch(e.request).then(put).catch(()=>caches.match(e.request)));
+});

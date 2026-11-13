@@ -4,6 +4,7 @@ const ORIGINS = new Set([
 const ONLINE_MS = 180000;
 const PING_MIN_MS = 45000;
 const SCORE_MIN_MS = 120000;
+const NICK_MIN_MS = 60000;
 const TOP_N = 50;
 const REF_PCT = 5;
 const REF_CAP = 50;
@@ -19,9 +20,12 @@ function cors(origin) {
   const allow = origin && (ORIGINS.has(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
   const headers = {
     'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'content-type',
+    'access-control-allow-headers': 'content-type, cache-control',
     'access-control-max-age': '86400',
-    'cache-control': 'no-store',
+    'cache-control': 'no-store, no-cache, must-revalidate',
+    'cdn-cache-control': 'no-store',
+    pragma: 'no-cache',
+    expires: '0',
     vary: 'Origin'
   };
   if (allow) headers['access-control-allow-origin'] = origin;
@@ -43,10 +47,16 @@ function validRef(r) {
   return typeof r === 'string' && /^[a-zA-Z0-9_-]{6,64}$/.test(r);
 }
 
+function stripBlankish(s) {
+  return s.replace(/[\u0000-\u001F\u007F\u00A0\u200B-\u200F\u202A-\u202E\u2060\u2800\u3164\uFEFF\uFFA0]/g, '');
+}
+
 function cleanNick(raw) {
   if (typeof raw !== 'string') return { ok: false, error: 'nick' };
-  let s = raw.replace(/<[^>]*>/g, '').replace(/[\u0000-\u001F\u007F]/g, '').replace(/\s+/g, ' ').trim();
-  if (s.length < 1 || s.length > 16) return { ok: false, error: 'nick' };
+  let s = stripBlankish(raw).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+  if (s.length < 2 || s.length > 16) return { ok: false, error: 'nick' };
+  if (!/^[0-9A-Za-zА-Яа-яЁёІіЇїЄєҐґ _-]+$/.test(s)) return { ok: false, error: 'nick' };
+  if (!s.replace(/[\s_-]+/g, '').length) return { ok: false, error: 'nick' };
   const low = s.toLowerCase();
   for (const w of BAD) if (low.includes(w)) return { ok: false, error: 'nick' };
   return { ok: true, nick: s };
@@ -119,7 +129,10 @@ async function resolveRef(kv, ref) {
   if (!validRef(ref)) return null;
   const mapped = await kv.get('r:' + ref);
   if (mapped && validId(mapped)) return mapped;
-  if (validId(ref)) {
+  // A short invite code must never be treated as a playerId (that would attach the referrer's record).
+  // Only accept a raw id if it looks like a full playerId, not a 12-char ref.
+  const compact = String(ref).replace(/-/g, '');
+  if (validId(ref) && compact.length >= 20) {
     const rec = await readJson(kv, 'p:' + ref, null);
     if (rec) return ref;
   }
@@ -219,26 +232,40 @@ export default {
           readJson(env.KV, 'p:' + referrerId, null),
           readJson(env.KV, 'meta', { total: 0 })
         ]);
-        if (newbie) return json({ ok: false, error: 'exists', already: true, gift: 0 }, 200, origin);
+        if (newbie) {
+          const age = now - (newbie.first || now);
+          const unused = !newbie.referredBy && !(newbie.score > 0) && !newbie.nick && age < 120000;
+          if (!unused) return json({ ok: false, error: 'exists', already: true, gift: 0 }, 200, origin);
+        }
 
-        const newRec = { first: now, lastPing: now, score: 0, nick: '', referredBy: referrerId, invited: 0, unclaimed: 0 };
+        const newRec = Object.assign({}, newbie || {}, {
+          first: (newbie && newbie.first) || now,
+          lastPing: now,
+          score: (newbie && newbie.score) || 0,
+          nick: (newbie && newbie.nick) || '',
+          referredBy: referrerId,
+          invited: (newbie && newbie.invited) || 0,
+          unclaimed: 0
+        });
         const refRec = referrer || { first: now, lastPing: now, score: 0, nick: '', invited: 0, unclaimed: 0 };
         refRec.invited = (refRec.invited || 0) + 1;
         refRec.unclaimed = (refRec.unclaimed || 0) + 1;
         if (!Array.isArray(refRec.invitees)) refRec.invitees = [];
         if (refRec.invitees.length < 50) refRec.invitees.push(newId);
-        meta.total = (meta.total || 0) + 1;
-        meta.updated = now;
-        await Promise.all([
+        const writes = [
           env.KV.put('p:' + newId, JSON.stringify(newRec)),
-          env.KV.put('p:' + referrerId, JSON.stringify(refRec)),
-          env.KV.put('meta', JSON.stringify(meta))
-        ]);
+          env.KV.put('p:' + referrerId, JSON.stringify(refRec))
+        ];
+        if (!newbie) {
+          meta.total = (meta.total || 0) + 1;
+          meta.updated = now;
+          writes.push(env.KV.put('meta', JSON.stringify(meta)));
+        }
+        await Promise.all(writes);
         return json({
           ok: true,
           newcomer: true,
-          gift: REF_GIFT,
-          referredBy: referrerId
+          gift: REF_GIFT
         }, 200, origin);
       }
 
@@ -260,12 +287,69 @@ export default {
         }, 200, origin);
       }
 
+      if (request.method === 'POST' && path === '/nick') {
+        const body = await request.json().catch(() => null);
+        if (!body || !validId(body.playerId)) return json({ ok: false, error: 'playerId' }, 400, origin);
+        const nickRes = cleanNick(body.nick || '');
+        if (!nickRes.ok) return json({ ok: false, error: 'nick' }, 400, origin);
+        const id = body.playerId;
+        const now = Date.now();
+        const [rec, ladder, onlineMap, meta] = await Promise.all([
+          readJson(env.KV, 'p:' + id, null),
+          readJson(env.KV, 'ladder', []),
+          readJson(env.KV, 'online', {}),
+          readJson(env.KV, 'meta', { total: 0 })
+        ]);
+        if (rec && rec.nick === nickRes.nick) {
+          return json({
+            ok: true, nick: rec.nick, unchanged: true,
+            list: publicList(ladder, TOP_N, id), me: findMe(ladder, id),
+            online: countOnline(pruneOnline(onlineMap, now), now), total: (meta && meta.total) || 0
+          }, 200, origin);
+        }
+        if (rec && rec.lastNickAt && now - rec.lastNickAt < NICK_MIN_MS) {
+          return json({ ok: false, error: 'rate', retry: NICK_MIN_MS - (now - rec.lastNickAt) }, 429, origin);
+        }
+        const first = !rec;
+        const next = Object.assign({}, rec || {}, {
+          first: rec && rec.first ? rec.first : now,
+          lastPing: now,
+          lastNickAt: now,
+          nick: nickRes.nick,
+          score: rec && rec.score ? rec.score : 0,
+          invited: rec && rec.invited ? rec.invited : 0,
+          unclaimed: rec && rec.unclaimed ? rec.unclaimed : 0
+        });
+        const i = ladder.findIndex((e) => e.id === id);
+        const row = { id, nick: next.nick, score: next.score || 0 };
+        if (i >= 0) ladder[i] = row; else ladder.push(row);
+        sortLadder(ladder);
+        if (ladder.length > 500) ladder.length = 500;
+        const writes = [
+          env.KV.put('p:' + id, JSON.stringify(next)),
+          env.KV.put('ladder', JSON.stringify(ladder))
+        ];
+        if (first) {
+          meta.total = (meta.total || 0) + 1;
+          meta.updated = now;
+          writes.push(env.KV.put('meta', JSON.stringify(meta)));
+        }
+        await Promise.all(writes);
+        const online = pruneOnline(onlineMap, now);
+        return json({
+          ok: true,
+          nick: next.nick,
+          list: publicList(ladder, TOP_N, id),
+          me: findMe(ladder, id),
+          online: countOnline(online, now),
+          total: meta.total || 0
+        }, 200, origin);
+      }
+
       if (request.method === 'POST' && path === '/score') {
         const body = await request.json().catch(() => null);
         if (!body || !validId(body.playerId)) return json({ ok: false, error: 'playerId' }, 400, origin);
         if (!validScore(body.score)) return json({ ok: false, error: 'score' }, 400, origin);
-        const nickRes = cleanNick(body.nick || '');
-        if (!nickRes.ok) return json({ ok: false, error: 'nick' }, 400, origin);
         const id = body.playerId;
         const now = Date.now();
         let score = Math.floor(body.score);
@@ -275,9 +359,18 @@ export default {
           readJson(env.KV, 'online', {}),
           readJson(env.KV, 'meta', { total: 0 })
         ]);
+        let nickRes = cleanNick(body.nick || '');
+        if (!nickRes.ok) {
+          if (rec && rec.nick && String(body.nick || '') === rec.nick) nickRes = { ok: true, nick: rec.nick };
+          else return json({ ok: false, error: 'nick' }, 400, origin);
+        }
+        const nickChanging = !!(nickRes.nick && rec && rec.nick && nickRes.nick !== rec.nick);
+        const nickRateBlocked = nickChanging && rec.lastNickAt && now - rec.lastNickAt < NICK_MIN_MS;
+        const effectiveNick = nickRateBlocked || !nickRes.ok ? ((rec && rec.nick) || nickRes.nick) : nickRes.nick;
         if (rec && rec.lastScoreAt && now - rec.lastScoreAt < SCORE_MIN_MS - 2500) {
-          if (score <= (rec.score || 0) && nickRes.nick && nickRes.nick !== rec.nick) {
+          if (score <= (rec.score || 0) && nickChanging && !nickRateBlocked) {
             rec.nick = nickRes.nick;
+            rec.lastNickAt = now;
             const li = ladder.findIndex((e) => e.id === id);
             if (li >= 0) ladder[li].nick = rec.nick;
             await Promise.all([
@@ -289,6 +382,9 @@ export default {
               list: publicList(ladder, TOP_N, id), me: findMe(ladder, id),
               online: countOnline(pruneOnline(onlineMap, now), now), total: meta.total || 0
             }, 200, origin);
+          }
+          if (nickChanging && nickRateBlocked) {
+            return json({ ok: false, error: 'rate', retry: NICK_MIN_MS - (now - rec.lastNickAt) }, 429, origin);
           }
           return json({ ok: false, error: 'rate', retry: SCORE_MIN_MS - (now - rec.lastScoreAt) }, 429, origin);
         }
@@ -304,9 +400,10 @@ export default {
           first: rec && rec.first ? rec.first : now,
           lastPing: now,
           lastScoreAt: now,
-          nick: nickRes.nick,
+          nick: effectiveNick,
           score
         });
+        if (nickChanging && !nickRateBlocked) next.lastNickAt = now;
         const i = ladder.findIndex((e) => e.id === id);
         const row = { id, nick: next.nick, score };
         if (i >= 0) ladder[i] = row; else ladder.push(row);

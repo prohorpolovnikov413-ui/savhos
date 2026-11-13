@@ -120,12 +120,31 @@ const HOLI=[['⛪','Воскресное служение'],['🕊','Пасха'
 const URL0='https://prohorpolovnikov413-ui.github.io/tap-church/';
 const API='https://zavhoz-board.sj-polomki.workers.dev';
 const net={online:null,total:null,top:[],me:null,ok:false,lastSend:0,lastPing:0};
+function newPid(){return (crypto.randomUUID&&crypto.randomUUID())||('p-'+Date.now().toString(36)+Math.random().toString(36).slice(2,10))}
 function ensurePid(){
-  if(!S.pid){S.pid=(crypto.randomUUID&&crypto.randomUUID())||('p-'+Date.now().toString(36)+Math.random().toString(36).slice(2,10));save()}
+  if(!S.pid){S.pid=newPid();save()}
   return S.pid;
 }
 function defaultNick(){return 'Завхоз-'+ensurePid().replace(/-/g,'').slice(-4)}
 function ensureNick(){if(!S.nick){S.nick=defaultNick();save()}return S.nick}
+const NICK_BAD=['хуй','хуя','хуе','хуё','пизд','бляд','блят','ебан','ёбан','ебат','ёбат','сука','суки','сучк','мудил','мудак','жопа','залуп','гандон','гондон','пидор','пидар','педик','чмо','падла','тварь','дерьм','срать','срал'];
+function cleanNickClient(raw){
+  if(typeof raw!=='string')return {ok:false,msg:'Введите ник'};
+  let v=raw.replace(/[\u0000-\u001F\u007F\u00A0\u200B-\u200F\u202A-\u202E\u2060\u2800\u3164\uFEFF\uFFA0]/g,'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
+  if(v.length<2||v.length>16)return {ok:false,msg:'Ник — от 2 до 16 символов'};
+  if(!/^[0-9A-Za-zА-Яа-яЁёІіЇїЄєҐґ _-]+$/.test(v))return {ok:false,msg:'Можно буквы, цифры, пробел, _ и -'};
+  if(!v.replace(/[\s_-]+/g,'').length)return {ok:false,msg:'Ник не должен быть пустым'};
+  const low=v.toLowerCase();
+  for(const w of NICK_BAD)if(low.includes(w))return {ok:false,msg:'Этот ник нельзя использовать, выберите другой'};
+  return {ok:true,nick:v};
+}
+async function netNick(nick){
+  const j=await api('/nick',{method:'POST',body:JSON.stringify({playerId:ensurePid(),nick})});
+  applyNet(j);
+  if(panel==='board')renderP(true,{skipFetch:true});
+  if(panel==='info')renderP(true);
+  return j;
+}
 const REF_PCT=5,REF_CAP=50,REF_CHEST=2000,REF_GIFT=500;
 function refCode(){return ensurePid().replace(/-/g,'').slice(0,12)}
 function inviteUrl(){return URL0.replace(/\/?$/,'/')+'?ref='+encodeURIComponent(refCode())}
@@ -135,7 +154,7 @@ async function api(path,opt){
   const ctl=new AbortController();
   const tmr=setTimeout(()=>ctl.abort(),8000);
   try{
-    const r=await fetch(API+path,Object.assign({signal:ctl.signal},opt||{},{headers:Object.assign({'content-type':'application/json'},(opt&&opt.headers)||{})}));
+    const r=await fetch(API+path,Object.assign({signal:ctl.signal,cache:'no-store'},opt||{},{headers:Object.assign({'content-type':'application/json'},(opt&&opt.headers)||{})}));
     const j=await r.json().catch(()=>null);
     if(!r.ok){const err=new Error((j&&j.error)||('http '+r.status));err.status=r.status;err.body=j;throw err}
     return j;
@@ -178,7 +197,7 @@ async function netScore(force){
   try{
     const j=await api('/score',{method:'POST',body:JSON.stringify({playerId:ensurePid(),nick:ensureNick(),score:Math.floor(S.total||0),refCode:refCode()})});
     net.lastSend=now;applyNet(j);
-    if(panel==='board')renderP(true);
+    if(panel==='board')renderP(true,{skipFetch:true});
     return j;
   }catch(e){
     if(e.status!==429)net.ok=false;
@@ -190,25 +209,30 @@ async function netTop(){
   try{
     const j=await api('/top?limit=50&playerId='+encodeURIComponent(ensurePid()));
     applyNet(j);
-    if(panel==='board')renderP(true);
+    if(panel==='board')renderP(true,{skipFetch:true});
     return j;
-  }catch(e){net.ok=false;renderLive();if(panel==='board')renderP(true);return null}
+  }catch(e){net.ok=false;renderLive();if(panel==='board')renderP(true,{skipFetch:true});return null}
 }
-async function applyIncomingRef(){
+async function applyIncomingRef(retries){
   const ref=S.pendingRef;
   if(!ref||S.refDone)return;
-  if(ref===refCode()||ref===ensurePid()){S.refDone=1;S.pendingRef='';save();return}
-  try{
-    const j=await api('/ref',{method:'POST',body:JSON.stringify({newPlayerId:ensurePid(),ref})});
-    S.refDone=1;S.pendingRef='';
-    if(j&&j.ok&&j.newcomer&&j.gift){
-      add(j.gift,true);S.starterGift=j.gift;
-      toast('🎁 Подарок за приглашение: +'+fmt(j.gift)+' добрых дел!');
+  if(ref===refCode()||ref===ensurePid()||ref===String(ensurePid()).replace(/-/g,'')){S.refDone=1;S.pendingRef='';save();return}
+  const tries=Math.max(1,retries||5);
+  for(let i=0;i<tries;i++){
+    try{
+      const j=await api('/ref',{method:'POST',body:JSON.stringify({newPlayerId:ensurePid(),ref})});
+      S.refDone=1;S.pendingRef='';
+      if(j&&j.ok&&j.newcomer&&j.gift){
+        add(j.gift,true);S.starterGift=j.gift;
+        toast('🎁 Подарок за приглашение: +'+fmt(j.gift)+' добрых дел!');
+      }
+      save();
+      return;
+    }catch(e){
+      const err=e&&e.body&&e.body.error;
+      if(err==='exists'||err==='self'||(e&&e.body&&e.body.already)){S.refDone=1;S.pendingRef='';save();return}
+      if(i<tries-1)await new Promise(r=>setTimeout(r,400));
     }
-    save();
-  }catch(e){
-    const err=e&&e.body&&e.body.error;
-    if(err==='exists'||err==='self'||(e&&e.body&&e.body.already)){S.refDone=1;S.pendingRef='';save()}
   }
 }
 async function netMeAndClaim(){
@@ -233,18 +257,19 @@ async function netMeAndClaim(){
 }
 function startNet(){
   ensurePid();
-  applyIncomingRef().finally(()=>{netPing();setTimeout(()=>netScore(true),1200);netMeAndClaim()});
+  applyIncomingRef(5).finally(()=>{netPing();setTimeout(()=>netScore(true),1200);netMeAndClaim()});
   setInterval(netPing,60000);
   setInterval(()=>netScore(false),120000);
   setInterval(netMeAndClaim,180000);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden){netScore(true);save()}else{netPing();netMeAndClaim()}});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){netScore(true);save()}else{applyIncomingRef(3).finally(()=>{netPing();netMeAndClaim()})}});
 }
 function boardHtml(){
   const list=net.top||[];
   const me=net.me;
   const nick=S.nick||defaultNick();
   let h='<p class="apro">По всем добрым делам за всё время</p>';
-  h+='<div class="nickrow"><label>Ваш ник <input id="nickIn" maxlength="16" value="'+esc(nick)+'" aria-label="Ник"></label><button id="nickSave">Сохранить</button></div>';
+  h+='<div class="nickrow"><label>Ваш ник <input id="nickIn" maxlength="16" value="'+esc(nick)+'" aria-label="Ник" autocomplete="nickname"></label><button type="button" id="nickSave">Сменить ник</button></div>';
+  h+='<p class="nickhint">От 2 до 16 символов: буквы, цифры, пробел, _ и -</p>';
   if(!net.ok&&!list.length){
     h+='<p class="board-off">Нет связи с таблицей. Проверьте интернет — места появятся, как только сервер ответит. Ваш прогресс никуда не денется, он хранится на устройстве.</p>';
     return h;
@@ -255,25 +280,47 @@ function boardHtml(){
   else{
     h+='<ol class="board">'+list.map(e=>{
       const cls=e.me?' class="me"':'';
-      return '<li'+cls+'><span class="rk">'+e.rank+'</span><span class="nm">'+(e.me?'Вы · ':'')+esc(e.nick||'Гость')+'</span><span class="sc">'+fmt(e.score||0)+'</span></li>';
+      const edit=e.me?'<button type="button" class="nickedit" data-nickedit="1" aria-label="Сменить ник">✏️</button>':'';
+      return '<li'+cls+'><span class="rk">'+e.rank+'</span><span class="nm">'+(e.me?'Вы · ':'')+esc(e.nick||'Гость')+'</span>'+edit+'<span class="sc">'+fmt(e.score||0)+'</span></li>';
     }).join('')+'</ol>';
   }
   if(!net.ok)h+='<p class="board-off">Сейчас нет связи, показаны последние известные места.</p>';
   return h;
 }
-function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function saveNick(){
+function focusNickEdit(){
   const inp=$('#nickIn');if(!inp)return;
-  const v=inp.value.replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
-  if(v.length<1||v.length>16){toast('Ник — от 1 до 16 символов');return}
-  S.nick=v;save();
-  Promise.resolve(netScore(true)).then(j=>{
-    if(j&&j.ok)toast('Ник сохранён');
-    else if(j&&j.error==='nick')toast('Этот ник нельзя использовать, выберите другой');
-    else if(j&&j.error==='rate')toast('Ник сохранится чуть позже');
+  inp.focus();
+  try{inp.select()}catch(e){}
+  try{inp.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(e){try{inp.scrollIntoView()}catch(x){}}
+}
+async function saveNick(){
+  const inp=$('#nickIn');if(!inp)return;
+  const res=cleanNickClient(inp.value);
+  if(!res.ok){toast(res.msg);return}
+  const prev=S.nick;
+  S.nick=res.nick;save();
+  inp.value=res.nick;
+  try{
+    const j=await netNick(res.nick);
+    if(j&&j.ok)toast('Ник сохранён: '+res.nick);
+    else if(j&&j.error==='nick'){S.nick=prev;save();inp.value=prev||'';toast('Этот ник нельзя использовать, выберите другой')}
+    else if(j&&j.error==='rate')toast('Ник можно сменить раз в минуту');
     else toast('Ник записан у вас, в таблицу попадёт при связи');
+  }catch(e){
+    const err=e&&e.body&&e.body.error;
+    if(err==='nick'){S.nick=prev;save();inp.value=prev||'';toast('Этот ник нельзя использовать, выберите другой')}
+    else if(err==='rate'||e.status===429)toast('Ник можно сменить раз в минуту');
+    else toast('Ник записан у вас, в таблицу попадёт при связи');
+  }
+}
+function bindNickUi(){
+  const ns=$('#nickSave');if(ns)ns.onclick=()=>{snd('click');saveNick()};
+  const ni=$('#nickIn');if(ni)ni.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveNick()}});
+  document.querySelectorAll('[data-nickedit]').forEach(btn=>{
+    btn.onclick=()=>{snd('click');focusNickEdit()};
   });
 }
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 const KEY='zavhoz_sz_v1';
 let S={d:0,total:0,taps:0,u:{},ach:{},fix:0,mic:0,t:Date.now(),loc:0};
 let fresh=true;
@@ -290,15 +337,59 @@ if(!S.mg.cd)S.mg.cd={};if(!S.mg.n)S.mg.n={};if(!S.mg.best)S.mg.best={};
 if(!S.mg.diff)S.mg.diff={};if(!S.mg.bestScore)S.mg.bestScore={};
 if(S.tut==null)S.tut=(fresh||!S.total)?0:1;
 if(S.set.svol==null)S.set.svol=.8;if(S.set.mvol==null)S.set.mvol=.45;if(S.set.tapsnd==null)S.set.tapsnd=1;
-if(!S.pid)S.pid=(crypto.randomUUID&&crypto.randomUUID())||('p-'+Date.now().toString(36)+Math.random().toString(36).slice(2,10));
+if(!S.pid)S.pid=newPid();
 if(S.refInvited==null)S.refInvited=0;
-try{
-  const incoming=new URLSearchParams(location.search).get('ref');
-  if(incoming&&!S.refDone&&(fresh||(!S.total&&!S.taps))){
-    if(incoming!==refCode()&&incoming!==S.pid){S.pendingRef=incoming;save()}
-    else S.refDone=1;
+(function adoptPidGuard(){
+  const IDP=['pid','playerId','playerid','player_id','id','player','uid','user','save','data','state'];
+  function params(){
+    const out=[];
+    try{
+      const q=new URLSearchParams(location.search);
+      IDP.forEach(k=>{const v=q.get(k);if(v)out.push(v)});
+      const r=q.get('ref');if(r)out.push(r);
+      if(location.hash){
+        const h=new URLSearchParams(String(location.hash).replace(/^#/,''));
+        IDP.concat(['ref']).forEach(k=>{const v=h.get(k);if(v)out.push(v)});
+      }
+    }catch(e){}
+    return out;
   }
-}catch(e){}
+  function fromUrl(pid,list){
+    if(!pid)return false;
+    const compact=String(pid).replace(/-/g,'');
+    return list.some(v=>{
+      const t=String(v||''),c=t.replace(/-/g,'');
+      return t===pid||t===compact||c===pid||c===compact;
+    });
+  }
+  function clean(){
+    try{
+      const u=new URL(location.href);
+      let ch=false;
+      IDP.concat(['ref']).forEach(k=>{if(u.searchParams.has(k)){u.searchParams.delete(k);ch=true}});
+      if(u.hash&&/[?&#](pid|playerId|playerid|player_id|id|player|uid|user|save|data|state|ref)=/i.test(u.hash)){u.hash='';ch=true}
+      if(ch)history.replaceState(null,'',u.pathname+u.search+u.hash);
+    }catch(e){}
+  }
+  const incoming=params();
+  let ref='';
+  try{ref=new URLSearchParams(location.search).get('ref')||''}catch(e){}
+  // If this device's playerId was taken from a URL param, keep local progress and mint a new id
+  // so we stop writing to someone else's server account. Not destructive to the local save.
+  if(S.pid&&fromUrl(S.pid,incoming)&&!S.pidAdoptedFixed){
+    S.pid=newPid();
+    S.pidAdoptedFixed=1;
+  }
+  try{
+    if(ref&&!S.refDone){
+      const own=ref===refCode()||ref===S.pid||ref===String(S.pid).replace(/-/g,'');
+      if(own){S.refDone=1;S.pendingRef=''}
+      else if(fresh||(!S.total&&!S.taps)){S.pendingRef=ref}
+    }
+  }catch(e){}
+  save();
+  clean();
+})();
 const TITLE='Завхоз церкви';
 const DAYV=[
  ['Возлюби ближнего твоего, как самого себя','Мф 22:39'],
@@ -1900,7 +1991,7 @@ function prestHtml(){
   else t+='<br>Сделайте ещё больше дел, чтобы получить новое благословение.';
   return t;
 }
-function renderP(full){
+function renderP(full,opt){
   const b=$('#pbody');
   if(panel==='shop'){
     if(full||b.children.length!==UP.length){b.innerHTML=UP.map((u,k)=>`<div class="it" id="u_${u.id}"><div class="ic">${u.ic}</div><div class="tx"><b>${u.n}</b> <span class="c"></span><br>${u.d}</div><button data-k="${k}"></button></div>`).join('');b.querySelectorAll('button').forEach(x=>x.onclick=()=>buy(UP[x.dataset.k]))}
@@ -1942,7 +2033,18 @@ function renderP(full){
       });
     }
   }else if(panel==='board'){
-    if(full){b.innerHTML=boardHtml();const ns=$('#nickSave');if(ns)ns.onclick=()=>{snd('click');saveNick()};const ni=$('#nickIn');if(ni)ni.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveNick()}});netTop()}
+    if(full){
+      const ni0=$('#nickIn');
+      const typing=!!(ni0&&document.activeElement===ni0);
+      const draft=ni0?ni0.value:null;
+      b.innerHTML=boardHtml();bindNickUi();
+      const ni=$('#nickIn');
+      if(ni&&draft!=null&&(typing||draft!==(S.nick||defaultNick()))){
+        ni.value=draft;
+        if(typing){try{ni.focus();const n=draft.length;ni.setSelectionRange(n,n)}catch(e){}}
+      }
+      if(!(opt&&opt.skipFetch))netTop();
+    }
   }else if(panel==='parish'){
     if(full){b.innerHTML=parishHtml();const pb=$('#pwBtn');if(pb)pb.onclick=pwClaim}
     else{
@@ -1956,7 +2058,8 @@ function renderP(full){
   }else if(panel==='info'){
     if(full){
       const tg=(k,n)=>`<button class="tg ${S.set[k]?'on':''}" data-k="${k}">${n}: ${S.set[k]?'вкл':'выкл'}</button>`;
-      b.innerHTML=`<button id="shareBtn" class="big">📤 Поделиться игрой</button>
+      b.innerHTML=`<div class="nickrow info-nick"><label>Ваш ник <input id="nickIn" maxlength="16" value="${esc(S.nick||defaultNick())}" aria-label="Ник" autocomplete="nickname"></label><button type="button" id="nickSave">Сменить ник</button></div>
+<button id="shareBtn" class="big">📤 Поделиться игрой</button>
 <div class="it col"><div class="tx"><b>🙏 Новый приход</b><br><span id="prest">${prestHtml()}</span></div><button id="prBtn" class="warn">Начать новый приход</button></div>
 <div class="it col"><div class="tx"><b>⚙️ Настройки</b></div><div class="tgs">${tg('snd','🔊 Звук')}${tg('mus','🎵 Музыка')}${tg('vib','📳 Вибрация')}${tg('tapsnd','🔔 Звук нажатия')}</div>
 <div class="vol">🔊 <input id="svol" type="range" min="0" max="100" value="${Math.round((S.set.svol??.8)*100)}" aria-label="Громкость звуков"></div>
@@ -1965,7 +2068,7 @@ function renderP(full){
 <div class="it col"><div class="tx"><b>📖 Истории завхоза</b> · ${Math.min(S.loc+1,LOC.length)}/${LOC.length}</div><div class="stl">${LOC.map((l,i)=>i<=S.loc?`<button class="st" data-i="${i}">${i+1}. ${l.n}</button>`:`<button class="st" disabled>${i+1}. 🔒 ???</button>`).join('')}</div></div>
 <div class="it"><div class="tx">Вы — завхоз церкви. Нажимайте на церковь, делайте добрые дела, нанимайте волонтёров и запускайте молодёжку «4.0». К Рождеству и Пасхе церковь наряжается сама, а каждый день вас встречает стих из Писания. Покупайте здания для богослужений и улучшайте их: от молитвенного дома до летнего лагеря.<br><br>Во вкладке «Места» — таблица лучших игроков по добрым делам и счётчик тех, кто играет сейчас. В разделе «Мини-игры» — три испытания по три уровня: уборка в зале, поиск микрофона и помощь бабушке. Каждую игру можно проходить раз в 3 часа. За три звезды сложность растёт, а награда становится больше.<br><br>Каждый день — 3 новых задания с наградой. Ловите праздничные значки на экране: они дают ×7 ко всем делам на 30 секунд. После ${fmt(PR_RUN)} дел можно начать «Новый приход» и получить благословения навсегда.<br><br>Игра сохраняется сама. Пока вас нет, волонтёры трудятся (до 8 часов).<br><br>${VERSES[3]}</div></div>
 <button id="reset" style="background:#7a1f1f;width:100%;margin-top:6px">Стереть всё и начать с нуля</button>`;
-      $('#shareBtn').onclick=share;
+      $('#shareBtn').onclick=share;bindNickUi();
       $('#prBtn').onclick=askPrestige;
       const sv=$('#svol'),mv=$('#mvol');
       if(sv)sv.oninput=()=>{S.set.svol=sv.value/100;S.set.snd=S.set.svol>0?1:0;save()};
@@ -2053,4 +2156,4 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){save();if(
 window.addEventListener('pageshow',resumeAudio);
 window.addEventListener('pagehide',save);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-window.__game={S,TITLE,API,net,startEvent,openP,spawnBadge,offlineModal,showStory,askPrestige,startMini,closeMini,showTutor,showVerse,showSeasonBonus,applySeason,makeShareCard,pwEnsure,setTime,startRain,stopRain,showZavhoz,spawnEgg,ringBell,spawnWalkers,tickWalkers,setWalkN:n=>{walkForceN=n==null?null:n;spawnWalkers()},getWalkers:()=>walkers.map(w=>({x:w.x,y:w.y,state:w.state,t:w.t,kind:w.kind,item:w.item,op:w.op,side:w.side})),netPing,netScore,netTop,netMeAndClaim,ensurePid,ensureNick,refCode,inviteUrl,openInvite,closeInvite,shareInvite,unlockAudio,getAudio:()=>({ac:AC&&AC.state,unlocked:audioUnlocked,bgm:!!(bgm&&!bgm.paused),bgmSrc:bgm&&bgm.src}),get ev(){return ev},get badge(){return badge},get mini(){return mini},get season(){return season}};
+window.__game={S,TITLE,API,net,startEvent,openP,spawnBadge,offlineModal,showStory,askPrestige,startMini,closeMini,showTutor,showVerse,showSeasonBonus,applySeason,makeShareCard,pwEnsure,setTime,startRain,stopRain,showZavhoz,spawnEgg,ringBell,spawnWalkers,tickWalkers,setWalkN:n=>{walkForceN=n==null?null:n;spawnWalkers()},getWalkers:()=>walkers.map(w=>({x:w.x,y:w.y,state:w.state,t:w.t,kind:w.kind,item:w.item,op:w.op,side:w.side})),netPing,netScore,netTop,netMeAndClaim,ensurePid,ensureNick,cleanNickClient,saveNick,netNick,refCode,inviteUrl,openInvite,closeInvite,shareInvite,unlockAudio,getAudio:()=>({ac:AC&&AC.state,unlocked:audioUnlocked,bgm:!!(bgm&&!bgm.paused),bgmSrc:bgm&&bgm.src}),get ev(){return ev},get badge(){return badge},get mini(){return mini},get season(){return season}};
