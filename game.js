@@ -118,6 +118,120 @@ const STORIES=[
 ];
 const HOLI=[['⛪','Воскресное служение'],['🕊','Пасха'],['⭐','Рождество'],['🔥','Молодёжный вечер'],['🌿','Троица'],['🎶','Вечер хвалы'],['💧','Крещение'],['🍎','Праздник урожая']];
 const URL0='https://prohorpolovnikov413-ui.github.io/tap-church/';
+const API='https://zavhoz-board.sj-polomki.workers.dev';
+const net={online:null,total:null,top:[],me:null,ok:false,lastSend:0,lastPing:0};
+function ensurePid(){
+  if(!S.pid){S.pid=(crypto.randomUUID&&crypto.randomUUID())||('p-'+Date.now().toString(36)+Math.random().toString(36).slice(2,10));save()}
+  return S.pid;
+}
+function defaultNick(){return 'Завхоз-'+ensurePid().replace(/-/g,'').slice(-4)}
+function ensureNick(){if(!S.nick){S.nick=defaultNick();save()}return S.nick}
+async function api(path,opt){
+  const ctl=new AbortController();
+  const tmr=setTimeout(()=>ctl.abort(),8000);
+  try{
+    const r=await fetch(API+path,Object.assign({signal:ctl.signal},opt||{},{headers:Object.assign({'content-type':'application/json'},(opt&&opt.headers)||{})}));
+    const j=await r.json().catch(()=>null);
+    if(!r.ok){const err=new Error((j&&j.error)||('http '+r.status));err.status=r.status;err.body=j;throw err}
+    return j;
+  }finally{clearTimeout(tmr)}
+}
+function applyNet(j){
+  if(!j)return;
+  if(typeof j.online==='number')net.online=j.online;
+  if(typeof j.total==='number')net.total=j.total;
+  if(Array.isArray(j.list))net.top=j.list;
+  if(j.me)net.me=j.me;
+  net.ok=true;
+  renderLive();
+}
+function renderLive(){
+  const el=$('#live');if(!el)return;
+  el.hidden=false;
+  const o=net.online==null?'—':net.online, tot=net.total==null?'—':net.total;
+  if(!net.ok&&net.online==null){
+    el.textContent='🟢 —';
+    el.classList.add('off');
+    el.title='Нет связи с таблицей мест';
+    el.setAttribute('aria-label','Нет связи с таблицей мест');
+    return;
+  }
+  el.classList.remove('off');
+  el.textContent='🟢 '+o;
+  el.title='Сейчас играют: '+o+' · Всего игроков: '+tot;
+  el.setAttribute('aria-label','Сейчас играют: '+o+'. Всего игроков: '+tot+'. Открыть таблицу мест');
+}
+async function netPing(){
+  try{
+    const j=await api('/ping',{method:'POST',body:JSON.stringify({playerId:ensurePid()})});
+    net.lastPing=Date.now();applyNet(j);
+  }catch(e){net.ok=false;renderLive()}
+}
+async function netScore(force){
+  const now=Date.now();
+  if(!force&&net.lastSend&&now-net.lastSend<120000)return;
+  try{
+    const j=await api('/score',{method:'POST',body:JSON.stringify({playerId:ensurePid(),nick:ensureNick(),score:Math.floor(S.total||0)})});
+    net.lastSend=now;applyNet(j);
+    if(panel==='board')renderP(true);
+    return j;
+  }catch(e){
+    if(e.status!==429)net.ok=false;
+    renderLive();
+    return e.body||null;
+  }
+}
+async function netTop(){
+  try{
+    const j=await api('/top?limit=50&playerId='+encodeURIComponent(ensurePid()));
+    applyNet(j);
+    if(panel==='board')renderP(true);
+    return j;
+  }catch(e){net.ok=false;renderLive();if(panel==='board')renderP(true);return null}
+}
+function startNet(){
+  ensurePid();
+  netPing();
+  setTimeout(()=>netScore(true),1200);
+  setInterval(netPing,60000);
+  setInterval(()=>netScore(false),120000);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){netScore(true);save()}else netPing()});
+}
+function boardHtml(){
+  const list=net.top||[];
+  const me=net.me;
+  const nick=S.nick||defaultNick();
+  let h='<p class="apro">По всем добрым делам за всё время</p>';
+  h+='<div class="nickrow"><label>Ваш ник <input id="nickIn" maxlength="16" value="'+esc(nick)+'" aria-label="Ник"></label><button id="nickSave">Сохранить</button></div>';
+  if(!net.ok&&!list.length){
+    h+='<p class="board-off">Нет связи с таблицей. Проверьте интернет — места появятся, как только сервер ответит. Ваш прогресс никуда не денется, он хранится на устройстве.</p>';
+    return h;
+  }
+  if(me)h+='<p id="myRank">Ваше место: <b>'+me.rank+'</b>'+(me.of?' из '+me.of:'')+' · '+fmt(me.score)+' дел</p>';
+  else h+='<p id="myRank">Вас пока нет в таблице. Сохраните ник, и результат отправится сам.</p>';
+  if(!list.length)h+='<p class="board-off">Пока никого нет в таблице. Будьте первым!</p>';
+  else{
+    h+='<ol class="board">'+list.map(e=>{
+      const cls=e.me?' class="me"':'';
+      return '<li'+cls+'><span class="rk">'+e.rank+'</span><span class="nm">'+(e.me?'Вы · ':'')+esc(e.nick||'Гость')+'</span><span class="sc">'+fmt(e.score||0)+'</span></li>';
+    }).join('')+'</ol>';
+  }
+  if(!net.ok)h+='<p class="board-off">Сейчас нет связи, показаны последние известные места.</p>';
+  return h;
+}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function saveNick(){
+  const inp=$('#nickIn');if(!inp)return;
+  const v=inp.value.replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
+  if(v.length<1||v.length>16){toast('Ник — от 1 до 16 символов');return}
+  S.nick=v;save();
+  Promise.resolve(netScore(true)).then(j=>{
+    if(j&&j.ok)toast('Ник сохранён');
+    else if(j&&j.error==='nick')toast('Этот ник нельзя использовать, выберите другой');
+    else if(j&&j.error==='rate')toast('Ник сохранится чуть позже');
+    else toast('Ник записан у вас, в таблицу попадёт при связи');
+  });
+}
 const KEY='zavhoz_sz_v1';
 let S={d:0,total:0,taps:0,u:{},ach:{},fix:0,mic:0,t:Date.now(),loc:0};
 let fresh=true;
@@ -134,6 +248,7 @@ if(!S.mg.cd)S.mg.cd={};if(!S.mg.n)S.mg.n={};if(!S.mg.best)S.mg.best={};
 if(!S.mg.diff)S.mg.diff={};if(!S.mg.bestScore)S.mg.bestScore={};
 if(S.tut==null)S.tut=(fresh||!S.total)?0:1;
 if(S.set.svol==null)S.set.svol=.8;if(S.set.mvol==null)S.set.mvol=.45;
+if(!S.pid)S.pid=(crypto.randomUUID&&crypto.randomUUID())||('p-'+Date.now().toString(36)+Math.random().toString(36).slice(2,10));
 const TITLE='Завхоз церкви';
 const DAYV=[
  ['Возлюби ближнего твоего, как самого себя','Мф 22:39'],
@@ -817,7 +932,7 @@ function parishHtml(){
     +'<div class="pwbar"><i style="width:'+pct+'%"></i></div>'
     +'<p>Собрано: <b>'+fmt(p.got)+'</b> из <b>'+fmt(p.need)+'</b> дел</p>'
     +(p.claimed?'<p>Недельная цель уже закрыта. Слава Богу!</p>':'<button id="pwBtn" class="big" '+(ready?'':'disabled')+'>'+(ready?'Забрать награду':'Ещё '+fmt(Math.max(0,p.need-p.got)))+'</button>')
-    +'<p class="parish-note">Живая таблица всех игроков появится позже — для неё нужен общий сервер. Пока это цель вашего прихода на неделю: добрые дела, которые вы делаете здесь, идут в общую копилку этой цели.</p>';
+    +'<p class="parish-note">Общая таблица игроков — во вкладке «Места». Здесь цель вашего прихода на неделю: добрые дела, которые вы делаете, идут в копилку этой цели.</p>';
 }
 
 function makeShareCard(){
@@ -1597,9 +1712,10 @@ function grannyStep(lane,byUser){
 // ---------- panels ----------
 let panel=null;
 function achProg(){return ACH.filter(a=>S.ach[a.id]).length+'/'+ACH.length}
-function setTitle(p){$('#ptitle').textContent={shop:'🛠 Улучшения',bld:'🏛 Здания',quest:'📅 Задания на сегодня',mini:'🎮 Мини-игры',parish:'🕊 Приход',ach:'🏆 Достижения · '+achProg(),info:'ℹ️ Об игре'}[p]}
-function openP(p){panel=p;$('#panel').hidden=false;setTitle(p);renderP(true);document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.p===p))}
-$('#pclose').onclick=()=>{panel=null;$('#panel').hidden=true;document.querySelectorAll('#tabs button').forEach(b=>b.classList.remove('on'))};
+function setTitle(p){$('#ptitle').textContent={shop:'🛠 Улучшения',bld:'🏛 Здания',quest:'📅 Задания на сегодня',mini:'🎮 Мини-игры',parish:'🕊 Приход',board:'🏅 Таблица мест',ach:'🏆 Достижения · '+achProg(),info:'ℹ️ Об игре'}[p]}
+function syncTab(p){document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',!!p&&b.dataset.p===p));const bb=$('#boardBtn');if(bb)bb.classList.toggle('on',p==='board')}
+function openP(p){panel=p;$('#panel').hidden=false;setTitle(p);renderP(true);syncTab(p)}
+$('#pclose').onclick=()=>{panel=null;$('#panel').hidden=true;syncTab(null)};
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{snd('click');panel===b.dataset.p?$('#pclose').onclick():openP(b.dataset.p)});
 function untilMidnight(){const n=new Date(),m=new Date(n);m.setHours(24,0,0,0);return (m-n)/1000}
 function statsHtml(){
@@ -1654,6 +1770,8 @@ function renderP(full){
         if(bt){bt.disabled=!!left;bt.textContent=left?'Ждём':'Играть'}
       });
     }
+  }else if(panel==='board'){
+    if(full){b.innerHTML=boardHtml();const ns=$('#nickSave');if(ns)ns.onclick=()=>{snd('click');saveNick()};const ni=$('#nickIn');if(ni)ni.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveNick()}});netTop()}
   }else if(panel==='parish'){
     if(full){b.innerHTML=parishHtml();const pb=$('#pwBtn');if(pb)pb.onclick=pwClaim}
     else{
@@ -1674,7 +1792,7 @@ function renderP(full){
 <div class="vol">🎵 <input id="mvol" type="range" min="0" max="100" value="${Math.round((S.set.mvol??.45)*100)}" aria-label="Громкость музыки"></div></div>
 <div class="it"><div class="tx"><b>📊 Статистика</b><br><span id="statsBox">${statsHtml()}</span></div></div>
 <div class="it col"><div class="tx"><b>📖 Истории завхоза</b> · ${Math.min(S.loc+1,LOC.length)}/${LOC.length}</div><div class="stl">${LOC.map((l,i)=>i<=S.loc?`<button class="st" data-i="${i}">${i+1}. ${l.n}</button>`:`<button class="st" disabled>${i+1}. 🔒 ???</button>`).join('')}</div></div>
-<div class="it"><div class="tx">Вы — завхоз церкви. Нажимайте на церковь, делайте добрые дела, нанимайте волонтёров и запускайте молодёжку «4.0». К Рождеству и Пасхе церковь наряжается сама, а каждый день вас встречает стих из Писания. Покупайте здания для богослужений и улучшайте их: от молитвенного дома до летнего лагеря.<br><br>В разделе «Мини-игры» — три испытания по три уровня: уборка в зале, поиск микрофона и помощь бабушке. Каждую игру можно проходить раз в 3 часа. За три звезды сложность растёт, а награда становится больше.<br><br>Каждый день — 3 новых задания с наградой. Ловите праздничные значки на экране: они дают ×7 ко всем делам на 30 секунд. После ${fmt(PR_RUN)} дел можно начать «Новый приход» и получить благословения навсегда.<br><br>Игра сохраняется сама. Пока вас нет, волонтёры трудятся (до 8 часов).<br><br>${VERSES[3]}</div></div>
+<div class="it"><div class="tx">Вы — завхоз церкви. Нажимайте на церковь, делайте добрые дела, нанимайте волонтёров и запускайте молодёжку «4.0». К Рождеству и Пасхе церковь наряжается сама, а каждый день вас встречает стих из Писания. Покупайте здания для богослужений и улучшайте их: от молитвенного дома до летнего лагеря.<br><br>Во вкладке «Места» — таблица лучших игроков по добрым делам и счётчик тех, кто играет сейчас. В разделе «Мини-игры» — три испытания по три уровня: уборка в зале, поиск микрофона и помощь бабушке. Каждую игру можно проходить раз в 3 часа. За три звезды сложность растёт, а награда становится больше.<br><br>Каждый день — 3 новых задания с наградой. Ловите праздничные значки на экране: они дают ×7 ко всем делам на 30 секунд. После ${fmt(PR_RUN)} дел можно начать «Новый приход» и получить благословения навсегда.<br><br>Игра сохраняется сама. Пока вас нет, волонтёры трудятся (до 8 часов).<br><br>${VERSES[3]}</div></div>
 <button id="reset" style="background:#7a1f1f;width:100%;margin-top:6px">Стереть всё и начать с нуля</button>`;
       $('#shareBtn').onclick=share;
       $('#prBtn').onclick=askPrestige;
@@ -1749,7 +1867,9 @@ function frame(now){
 applySeason();
 if($('#tskip'))$('#tskip').onclick=()=>{snd('click');closeTutor()};
 if($('#tnext'))$('#tnext').onclick=()=>{snd('click');if(tutI<TUTOR.length-1){tutI++;renderTutor()}else closeTutor()};
-renderChurch();spawnWalkers();mountBits();
+renderChurch();spawnWalkers();mountBits();startNet();
+if($('#live'))$('#live').onclick=()=>{snd('click');panel==='board'?$('#pclose').onclick():openP('board')};
+if($('#boardBtn'))$('#boardBtn').onclick=()=>{snd('click');panel==='board'?$('#pclose').onclick():openP('board')};
 if(!S.tut)setTimeout(showTutor,350);
 else setTimeout(bootModals,400);
 requestAnimationFrame(frame);
@@ -1757,4 +1877,4 @@ setInterval(save,5000);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){save();if(AC)AC.suspend()}else if(AC&&(S.set.mus||S.set.snd))AC.resume()});
 window.addEventListener('pagehide',save);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-window.__game={S,TITLE,startEvent,openP,spawnBadge,offlineModal,showStory,askPrestige,startMini,closeMini,showTutor,showVerse,showSeasonBonus,applySeason,makeShareCard,pwEnsure,setTime,startRain,stopRain,showZavhoz,spawnEgg,ringBell,spawnWalkers,tickWalkers,setWalkN:n=>{walkForceN=n==null?null:n;spawnWalkers()},getWalkers:()=>walkers.map(w=>({x:w.x,y:w.y,state:w.state,t:w.t,kind:w.kind,item:w.item,op:w.op,side:w.side})),get ev(){return ev},get badge(){return badge},get mini(){return mini},get season(){return season}};
+window.__game={S,TITLE,API,net,startEvent,openP,spawnBadge,offlineModal,showStory,askPrestige,startMini,closeMini,showTutor,showVerse,showSeasonBonus,applySeason,makeShareCard,pwEnsure,setTime,startRain,stopRain,showZavhoz,spawnEgg,ringBell,spawnWalkers,tickWalkers,setWalkN:n=>{walkForceN=n==null?null:n;spawnWalkers()},getWalkers:()=>walkers.map(w=>({x:w.x,y:w.y,state:w.state,t:w.t,kind:w.kind,item:w.item,op:w.op,side:w.side})),netPing,netScore,netTop,ensurePid,ensureNick,get ev(){return ev},get badge(){return badge},get mini(){return mini},get season(){return season}};
