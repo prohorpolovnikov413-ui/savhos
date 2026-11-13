@@ -46,6 +46,23 @@ const psBase=()=>UP.reduce((a,u)=>a+(u.ps||0)*cnt(u.id),0);
 const mult=()=>ev&&ev.type==='sunday'?2:1;
 const ps=()=>(ev&&(ev.type==='fuse'||ev.type==='mic'))?0:psBase()*mult();
 function people(s){return 3+UP.reduce((a,u)=>a+(u.pp||0)*((s.u||{})[u.id]||0),0)+Math.floor(Math.sqrt(s.total/50))}
+function churchStage(s){const p=people(s);if(p>=500)return 5;if(p>=200)return 4;if(p>=80)return 3;if(p>=20)return 2;return 1}
+let shownChurch=0;
+function renderChurch(){
+  const st=churchStage(S);
+  if(st===shownChurch)return;
+  const img=tapEl.querySelector('img');
+  if(img)img.src='img/church'+st+'.webp';
+  if(shownChurch&&st>shownChurch){
+    tapEl.classList.remove('evolve');void tapEl.offsetWidth;
+    tapEl.classList.add('evolve');
+    setTimeout(()=>tapEl.classList.remove('evolve'),800);
+    toast('⛪ Церковь преобразилась!');
+    vib([30,40,30]);
+  }
+  shownChurch=st;
+}
+[1,2,3,4,5].forEach(n=>{const i=new Image();i.src='img/church'+n+'.webp'});
 const fmt=n=>{n=Math.floor(n);if(n<1e4)return n.toLocaleString('ru-RU');const z=[[1e12,' трлн'],[1e9,' млрд'],[1e6,' млн'],[1e3,' тыс']];for(const[v,s]of z)if(n>=v)return(n/v).toFixed(n/v<100?1:0).replace('.',',')+s;};
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>e.classList.remove('on'),2600)}
 function modal(t){$('#mtext').innerHTML=t;$('#modal').hidden=false}
@@ -123,9 +140,10 @@ function frame(now){
   if(!ev&&Date.now()>evTimer){startEvent();evTimer=Date.now()+40000+Math.random()*50000}
   acc+=dt;
   $('#deeds').textContent=fmt(S.d);
-  if(acc>.25){acc=0;$('#dps').textContent=fmt(ps());$('#dpt').textContent=fmt(tapVal());$('#people').textContent=fmt(people(S));renderLoc();if(panel==='shop')renderP();if(ev)renderEvent();checkAch()}
+  if(acc>.25){acc=0;$('#dps').textContent=fmt(ps());$('#dpt').textContent=fmt(tapVal());$('#people').textContent=fmt(people(S));renderLoc();renderChurch();if(panel==='shop')renderP();if(ev)renderEvent();checkAch()}
   requestAnimationFrame(frame);
 }
+renderChurch();
 requestAnimationFrame(frame);
 setInterval(save,5000);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
