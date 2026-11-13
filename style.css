@@ -12,7 +12,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#2b1d14;color:#fff;fon
 #locName{font-weight:700}
 #locBar{height:6px;background:#fff3;border-radius:3px;margin:5px 0 3px;overflow:hidden}
 #locBar i{display:block;height:100%;width:0;background:#ffc94a;transition:width .3s}
-#play{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding-top:90px}
+#play{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding-top:90px;padding-bottom:calc(env(safe-area-inset-bottom) + 72px)}
 #tap{width:min(64vw,280px);height:min(64vw,280px);border-radius:50%;border:5px solid #ffc94a;padding:0;background:none;box-shadow:0 8px 30px #000a,0 0 0 8px #ffc94a33;transition:transform .08s;cursor:pointer;touch-action:manipulation}
 #tap img{width:100%;height:100%;border-radius:50%;display:block;pointer-events:none}
 #tap.hit{transform:scale(.93)}
@@ -326,5 +326,41 @@ ol.board .sc{opacity:.9;font-variant-numeric:tabular-nums}
 .board-off{opacity:.85;font-size:13px;line-height:1.4}
 
 @media (prefers-reduced-motion:reduce){
-  .flake,.puff,.walker,.walker .fig,.walker .leg,.walker .cane,.garland,.cat,.bird,.drop,.egg,.star{animation:none!important}
+  .flake,.puff,.walker,.walker .fig,.walker .leg,.walker .cane,.garland,.cat,.bird,.drop,.egg,.star,#inviteBtn{animation:none!important}
+}
+
+#inviteBtn{margin-top:12px;max-width:min(92vw,340px);width:100%;border:2px solid #ffe27a;background:linear-gradient(180deg,#ffd45a,#e08a12 55%,#c56a08);color:#3a2205;font:inherit;font-weight:800;font-size:17px;border-radius:18px;padding:8px 14px 9px;min-height:52px;line-height:1.2;cursor:pointer;touch-action:manipulation;z-index:2;box-shadow:0 0 0 4px #ffc94a55,0 6px 18px #0008,0 0 22px #ffc94a88;animation:invglow 1.4s ease-in-out infinite alternate;-webkit-appearance:none;appearance:none}
+#inviteBtn small{display:block;font-size:12px;font-weight:700;opacity:.95;margin-top:2px}
+#inviteBtn:active{transform:scale(.97)}
+#inviteBtn[hidden]{display:none!important}
+@keyframes invglow{
+  from{box-shadow:0 0 0 3px #ffc94a55,0 6px 16px #0008,0 0 12px #ffc94a66}
+  to{box-shadow:0 0 0 6px #ffc94a88,0 8px 22px #0008,0 0 28px #ffe27acc}
+}
+#ish{position:fixed;inset:0;background:#000a;z-index:5;display:flex;align-items:flex-end;justify-content:center;padding:0}
+#ish[hidden]{display:none!important}
+.ishbox{width:100%;max-width:440px;max-height:min(86vh,640px);background:#2b1d14f7;border-radius:22px 22px 0 0;color:#fff;box-shadow:0 -8px 28px #000c;display:flex;flex-direction:column;padding:0 0 calc(env(safe-area-inset-bottom) + 12px)}
+.ishh{display:flex;align-items:center;gap:8px;padding:14px 12px 8px}
+.ishh b{flex:1;font-size:20px}
+#ishx{background:#fff2;width:48px;min-height:48px;border:0;border-radius:12px;color:#fff;font:inherit;cursor:pointer}
+.ishbody{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 14px 8px}
+.ishcard{background:#fff1;border-radius:14px;padding:10px 12px;margin:0 0 8px}
+.ishcard.you{box-shadow:inset 0 0 0 2px #ffc94a66;background:#ffc94a22}
+.ishcard.pal{background:#1f5a2a55;box-shadow:inset 0 0 0 2px #7dcc8a55}
+.ishcard b{display:block;margin-bottom:4px;font-size:15px}
+.ishcard p{margin:0;font-size:14px;line-height:1.4;opacity:.95}
+.ishprog{text-align:center;background:#0006;border-radius:12px;padding:8px 10px;margin:4px 0 10px;font-size:15px}
+.ishlink{display:flex;gap:8px;margin-bottom:10px}
+.ishlink input{flex:1;min-width:0;font:inherit;font-size:13px;padding:10px;border-radius:12px;border:2px solid #ffc94a66;background:#0006;color:#fff}
+.ishlink button{background:#5b3a22;color:#fff;border:0;border-radius:12px;padding:0 12px;font:inherit;font-weight:700;min-height:44px;cursor:pointer}
+#ishshare{width:100%;background:#2f7d3a;color:#fff;border:0;border-radius:14px;min-height:52px;font:inherit;font-weight:800;font-size:18px;cursor:pointer}
+#ishshare:active{transform:scale(.98)}
+@media(max-height:760px){
+  #hint{display:none}
+  #inviteBtn{margin-top:8px;min-height:48px;font-size:16px;padding:6px 12px 7px}
+  #scene{width:min(72vw,280px);height:min(72vw,280px)}
+}
+@media(max-height:700px){
+  #play{padding-top:78px}
+  #scene{width:min(64vw,240px);height:min(64vw,240px)}
 }

@@ -126,6 +126,11 @@ function ensurePid(){
 }
 function defaultNick(){return 'Завхоз-'+ensurePid().replace(/-/g,'').slice(-4)}
 function ensureNick(){if(!S.nick){S.nick=defaultNick();save()}return S.nick}
+const REF_PCT=5,REF_CAP=50,REF_CHEST=2000,REF_GIFT=500;
+function refCode(){return ensurePid().replace(/-/g,'').slice(0,12)}
+function inviteUrl(){return URL0.replace(/\/?$/,'/')+'?ref='+encodeURIComponent(refCode())}
+const refMul=()=>1+Math.min(REF_CAP,REF_PCT*(S.refInvited||0))/100;
+function friendsWord(n){const a=n%10,b=n%100;return a===1&&b!==11?'друг':a>=2&&a<=4&&(b<10||b>=20)?'друга':'друзей'}
 async function api(path,opt){
   const ctl=new AbortController();
   const tmr=setTimeout(()=>ctl.abort(),8000);
@@ -163,7 +168,7 @@ function renderLive(){
 }
 async function netPing(){
   try{
-    const j=await api('/ping',{method:'POST',body:JSON.stringify({playerId:ensurePid()})});
+    const j=await api('/ping',{method:'POST',body:JSON.stringify({playerId:ensurePid(),refCode:refCode()})});
     net.lastPing=Date.now();applyNet(j);
   }catch(e){net.ok=false;renderLive()}
 }
@@ -171,7 +176,7 @@ async function netScore(force){
   const now=Date.now();
   if(!force&&net.lastSend&&now-net.lastSend<120000)return;
   try{
-    const j=await api('/score',{method:'POST',body:JSON.stringify({playerId:ensurePid(),nick:ensureNick(),score:Math.floor(S.total||0)})});
+    const j=await api('/score',{method:'POST',body:JSON.stringify({playerId:ensurePid(),nick:ensureNick(),score:Math.floor(S.total||0),refCode:refCode()})});
     net.lastSend=now;applyNet(j);
     if(panel==='board')renderP(true);
     return j;
@@ -189,13 +194,50 @@ async function netTop(){
     return j;
   }catch(e){net.ok=false;renderLive();if(panel==='board')renderP(true);return null}
 }
+async function applyIncomingRef(){
+  const ref=S.pendingRef;
+  if(!ref||S.refDone)return;
+  if(ref===refCode()||ref===ensurePid()){S.refDone=1;S.pendingRef='';save();return}
+  try{
+    const j=await api('/ref',{method:'POST',body:JSON.stringify({newPlayerId:ensurePid(),ref})});
+    S.refDone=1;S.pendingRef='';
+    if(j&&j.ok&&j.newcomer&&j.gift){
+      add(j.gift,true);S.starterGift=j.gift;
+      toast('🎁 Подарок за приглашение: +'+fmt(j.gift)+' добрых дел!');
+    }
+    save();
+  }catch(e){
+    const err=e&&e.body&&e.body.error;
+    if(err==='exists'||err==='self'||(e&&e.body&&e.body.already)){S.refDone=1;S.pendingRef='';save()}
+  }
+}
+async function netMeAndClaim(){
+  try{
+    const j=await api('/me?playerId='+encodeURIComponent(ensurePid()));
+    if(j&&typeof j.invitedCount==='number'){S.refInvited=j.invitedCount;save();renderInvite()}
+    if(j&&j.unclaimed>0){
+      const c=await api('/claim',{method:'POST',body:JSON.stringify({playerId:ensurePid()})});
+      if(c&&c.ok&&c.claimed>0){
+        const amount=c.claimed*(c.chest||REF_CHEST);
+        add(amount,true);
+        S.refInvited=c.invitedCount||S.refInvited||0;
+        const pct=c.bonusPct!=null?c.bonusPct:Math.min(REF_CAP,REF_PCT*(S.refInvited||0));
+        const n=c.claimed;
+        toast(n===1
+          ?'🎁 Друг зашёл по вашей ссылке! Сундук: +'+fmt(amount)+' дел и +'+REF_PCT+'% к доходу навсегда'
+          :'🎁 К вам пришли '+n+' '+friendsWord(n)+'! Сундук: +'+fmt(amount)+' дел и +'+pct+'% к доходу навсегда');
+        snd('chime');save();renderInvite();
+      }
+    }
+  }catch(e){}
+}
 function startNet(){
   ensurePid();
-  netPing();
-  setTimeout(()=>netScore(true),1200);
+  applyIncomingRef().finally(()=>{netPing();setTimeout(()=>netScore(true),1200);netMeAndClaim()});
   setInterval(netPing,60000);
   setInterval(()=>netScore(false),120000);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden){netScore(true);save()}else netPing()});
+  setInterval(netMeAndClaim,180000);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){netScore(true);save()}else{netPing();netMeAndClaim()}});
 }
 function boardHtml(){
   const list=net.top||[];
@@ -240,15 +282,23 @@ if(!S.u)S.u={};if(!S.ach)S.ach={};if(!S.b)S.b={};
 // v6 migration
 if(S.run==null)S.run=S.total;
 if(!S.st)S.st={play:0,best:0,ev:0,q:0,pr:0};
-if(!S.set)S.set={snd:1,mus:1,vib:1};
+if(!S.set)S.set={snd:1,mus:1,vib:1,tapsnd:1};
 if(S.bl==null)S.bl=0;
 if(S.intro==null)S.intro=fresh||!S.total?0:1;
 if(!S.mg)S.mg={cd:{},n:{},best:{}};
 if(!S.mg.cd)S.mg.cd={};if(!S.mg.n)S.mg.n={};if(!S.mg.best)S.mg.best={};
 if(!S.mg.diff)S.mg.diff={};if(!S.mg.bestScore)S.mg.bestScore={};
 if(S.tut==null)S.tut=(fresh||!S.total)?0:1;
-if(S.set.svol==null)S.set.svol=.8;if(S.set.mvol==null)S.set.mvol=.45;
+if(S.set.svol==null)S.set.svol=.8;if(S.set.mvol==null)S.set.mvol=.45;if(S.set.tapsnd==null)S.set.tapsnd=1;
 if(!S.pid)S.pid=(crypto.randomUUID&&crypto.randomUUID())||('p-'+Date.now().toString(36)+Math.random().toString(36).slice(2,10));
+if(S.refInvited==null)S.refInvited=0;
+try{
+  const incoming=new URLSearchParams(location.search).get('ref');
+  if(incoming&&!S.refDone&&(fresh||(!S.total&&!S.taps))){
+    if(incoming!==refCode()&&incoming!==S.pid){S.pendingRef=incoming;save()}
+    else S.refDone=1;
+  }
+}catch(e){}
 const TITLE='Завхоз церкви';
 const DAYV=[
  ['Возлюби ближнего твоего, как самого себя','Мф 22:39'],
@@ -361,7 +411,7 @@ function applySeason(force){
   document.body.classList.toggle('night',isNight());
   renderSeasonDeco();
   if(shownChurch){shownChurch=0;renderChurch()}
-  if(AC&&S.set.mus)musicSync();
+  if(S.set.mus)musicSync();
 }
 function renderSeasonDeco(){
   const box=$('#seasons');if(!box)return;
@@ -850,7 +900,7 @@ const TUTOR=[
 ];
 let tutI=0;
 function showTutor(){
-  tutI=0;renderTutor();$('#tutor').hidden=false;
+  tutI=0;renderTutor();$('#tutor').hidden=false;setInviteVisible();
 }
 function renderTutor(){
   const s=TUTOR[tutI];
@@ -861,7 +911,7 @@ function renderTutor(){
 }
 function closeTutor(){
   document.body.classList.remove('tut-hl','tut-hl2','tut-hl3');
-  $('#tutor').hidden=true;S.tut=1;save();setTimeout(bootModals,200);
+  $('#tutor').hidden=true;S.tut=1;save();setTimeout(bootModals,200);setInviteVisible();
 }
 function bootModals(){
   showVerse();
@@ -977,10 +1027,10 @@ const cost=u=>Math.ceil(u.c*Math.pow(1.15,cnt(u.id)));
 const bcost=(b,s)=>Math.ceil(b.c*Math.pow(3,bcnt(b.id,s)));
 const blessMul=()=>1+.1*(S.bl||0);
 const tapBld=()=>BLD.reduce((a,b)=>a+(b.tap||0)*bcnt(b.id),0);
-const tapVal=()=>(1+UP.reduce((a,u)=>a+(u.tap||0)*cnt(u.id),0)+tapBld())*mult()*blessMul();
+const tapVal=()=>(1+UP.reduce((a,u)=>a+(u.tap||0)*cnt(u.id),0)+tapBld())*mult()*blessMul()*refMul();
 const psBuildings=()=>BLD.reduce((a,b)=>a+(b.ps||0)*bcnt(b.id),0);
 const bldMul=()=>1+(BLD.find(b=>b.mul)?(BLD.find(b=>b.mul).mul)*bcnt('camp'):0);
-const psBase=()=>(UP.reduce((a,u)=>a+(u.ps||0)*cnt(u.id),0)+psBuildings())*bldMul()*blessMul();
+const psBase=()=>(UP.reduce((a,u)=>a+(u.ps||0)*cnt(u.id),0)+psBuildings())*bldMul()*blessMul()*refMul();
 const sundayMul=()=>2+((BLD.find(b=>b.sun)||{}).sun||0)*bcnt('hall');
 const boostOn=()=>!!boost&&boost.end>Date.now();
 const mult=()=>(ev&&ev.type==='sunday'?sundayMul():1)*(boostOn()?7:1);
@@ -1056,14 +1106,14 @@ function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clea
 const mq=[];let mOpen=false;
 function modal(html,btns){mq.push({html,btns});if(!mOpen)nextModal()}
 function nextModal(){
-  const m=mq.shift();if(!m){mOpen=false;$('#modal').hidden=true;return}
+  const m=mq.shift();if(!m){mOpen=false;$('#modal').hidden=true;setInviteVisible();return}
   mOpen=true;$('#mtext').innerHTML=m.html;
   const bx=$('#mbtns');bx.innerHTML='';
   (m.btns||[{t:'Слава Богу! 🙏'}]).forEach(b=>{const e=document.createElement('button');e.textContent=b.t;if(b.cls)e.className=b.cls;if(b.dis)e.disabled=true;e.onclick=()=>{snd('click');if(b.f&&b.f()===false)return;nextModal()};bx.appendChild(e)});
-  $('#modal').hidden=false;
+  $('#modal').hidden=false;setInviteVisible();
 }
 // ---------- audio ----------
-let AC=null,master=null,musGain=null,musT=null,musStep=0;
+let AC=null,master=null,musGain=null,musT=null,musStep=0,bgm=null,tapAud=null,audioUnlocked=false,lastTapSnd=0;
 const HZ={C3:130.81,D3:146.83,E3:164.81,F3:174.61,G3:196,A3:220,B3:246.94,C4:261.63,D4:293.66,E4:329.63,F4:349.23,G4:392,A4:440,B4:493.88,C5:523.25,D5:587.33,E5:659.25,F5:698.46,G5:783.99};
 // Old 100th (PD) / Silent Night (PD) / simple Easter chorale (PD-style)
 const HYMN={
@@ -1071,11 +1121,78 @@ const HYMN={
   xmas:{beat:.7,span:16,mel:[['G4',0,1.5],['A4',1.5,.5],['G4',2,1],['E4',3,3],['G4',6,1.5],['A4',7.5,.5],['G4',8,1],['E4',9,3],['D5',12,2],['D5',14,2],['B4',16,3]],ch:[['C4','E4','G4'],['C4','F4','A4'],['G3','D4','G4'],['C4','E4','G4']]},
   easter:{beat:.5,span:12,mel:[['C4',0,1],['E4',1,1],['G4',2,1],['C5',3,2],['B4',5,1],['C5',6,1],['D5',7,2],['E5',9,1],['C5',10,1],['G4',11,1],['E4',12,2],['C4',14,2]],ch:[['C4','E4','G4'],['G3','B3','D4'],['C4','E4','G4'],['F3','A3','C4']]}
 };
-function ac(){
-  if(!AC){const C=window.AudioContext||window.webkitAudioContext;if(!C)return null;AC=new C();master=AC.createGain();master.gain.value=.9;master.connect(AC.destination);musGain=AC.createGain();musGain.gain.value=S.set.mvol??.45;const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1600;musGain.connect(lp);lp.connect(master)}
-  if(AC.state==='suspended')AC.resume();
+function hymnKind(){return season==='xmas'?'xmas':season==='easter'?'easter':'main'}
+function canAac(){try{const a=document.createElement('audio');return !!(a.canPlayType&&(a.canPlayType('audio/mp4; codecs="mp4a.40.2"')||a.canPlayType('audio/mp4')))}catch(e){return true}}
+function hymnSrc(kind){return 'audio/hymn-'+(kind||hymnKind())+'.'+(canAac()?'m4a':'mp3')}
+function setPlaybackSession(){try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}}
+function ensureBgm(){
+  if(bgm)return bgm;
+  bgm=document.createElement('audio');
+  bgm.id='bgm';
+  bgm.setAttribute('playsinline','');
+  bgm.setAttribute('webkit-playsinline','');
+  bgm.playsInline=true;
+  bgm.loop=true;
+  bgm.preload='auto';
+  bgm.volume=S.set.mvol??.45;
+  const kind=hymnKind();
+  bgm.src=hymnSrc(kind);
+  bgm.dataset.kind=kind;
+  document.body.appendChild(bgm);
+  try{bgm.load()}catch(e){}
+  return bgm;
+}
+function ensureTapAud(){
+  if(tapAud)return tapAud;
+  tapAud=document.createElement('audio');
+  tapAud.id='tapAud';
+  tapAud.setAttribute('playsinline','');
+  tapAud.setAttribute('webkit-playsinline','');
+  tapAud.playsInline=true;
+  tapAud.preload='auto';
+  tapAud.src='audio/tap.'+(canAac()?'m4a':'mp3');
+  document.body.appendChild(tapAud);
+  try{tapAud.load()}catch(e){}
+  return tapAud;
+}
+function ac(fromGesture){
+  if(!AC){
+    const C=window.AudioContext||window.webkitAudioContext;if(!C)return null;
+    AC=new C();
+    master=AC.createGain();master.gain.value=.9;master.connect(AC.destination);
+    musGain=AC.createGain();musGain.gain.value=S.set.mvol??.45;
+    const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1600;
+    musGain.connect(lp);lp.connect(master);
+    try{AC.addEventListener('statechange',()=>{if(!document.hidden&&AC&&(AC.state==='suspended'||AC.state==='interrupted')){setPlaybackSession();AC.resume();if(S.set.mus&&audioUnlocked)startBgm()}})}catch(e){}
+  }
+  if(fromGesture&&AC.state!=='running'){
+    try{const b=AC.createBuffer(1,1,AC.sampleRate||44100);const s=AC.createBufferSource();s.buffer=b;s.connect(AC.destination);s.start(0)}catch(e){}
+  }
+  if(AC.state==='suspended'||AC.state==='interrupted'){try{AC.resume()}catch(e){}}
   if(musGain)musGain.gain.value=S.set.mvol??.45;
   return AC;
+}
+function startBgm(fromGesture){
+  const el=ensureBgm();
+  if(!S.set.mus){try{el.pause()}catch(e){}return}
+  const kind=hymnKind();
+  if(el.dataset.kind!==kind){el.dataset.kind=kind;el.src=hymnSrc(kind);try{el.load()}catch(e){}}
+  el.volume=S.set.mvol??.45;
+  if(!audioUnlocked&&!fromGesture)return;
+  try{const p=el.play();if(p&&p.catch)p.catch(()=>{})}catch(e){}
+}
+function unlockAudio(){
+  setPlaybackSession();
+  ac(true);
+  ensureBgm();
+  ensureTapAud();
+  audioUnlocked=true;
+  startBgm(true);
+}
+function resumeAudio(){
+  setPlaybackSession();
+  if(AC&&(AC.state==='suspended'||AC.state==='interrupted'))try{AC.resume()}catch(e){}
+  if(S.set.mus&&audioUnlocked)startBgm();
 }
 function tone(f,t0,dur,vol,type,dest){if(!AC||!f)return;const o=AC.createOscillator(),g=AC.createGain();o.type=type||'sine';o.frequency.value=f;g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(vol,t0+Math.min(.03,dur/5));g.gain.exponentialRampToValueAtTime(.0001,t0+dur);o.connect(g);g.connect(dest||master);o.start(t0);o.stop(t0+dur+.05)}
 function snd(k){
@@ -1088,33 +1205,35 @@ function snd(k){
   else if(k==='bell'){[392,523,659,784].forEach((f,i)=>tone(f,t+i*.03,.7,.11*v,'sine'));tone(196,t,.9,.07*v,'triangle')}
   else if(k==='bad'){tone(196,t,.22,.11*v,'triangle');tone(165,t+.08,.28,.08*v,'sine')}
 }
-function musTick(){
-  if(!S.set.mus||!AC||AC.state!=='running'||document.hidden)return;
-  const h=HYMN[season==='xmas'?'xmas':season==='easter'?'easter':'main'];
-  const beat=h.beat,t0=AC.currentTime+.04,vol=(S.set.mvol??.45);
-  if(musGain)musGain.gain.value=vol;
-  const ch=h.ch[musStep%h.ch.length];
-  ch.forEach(n=>{const f=HZ[n];if(!f)return;tone(f,t0,beat*4,.18,'sine',musGain);tone(f/2,t0,beat*4,.1,'triangle',musGain)});
-  h.mel.forEach(m=>{
-    const f=HZ[m[0]];if(!f)return;
-    const start=t0+m[1]*beat,dur=m[2]*beat*.95;
-    tone(f,start,dur,.22,'sine',musGain);
-    tone(f*2,start,dur*.8,.07,'triangle',musGain);
-  });
-  musStep++;
+function musicSync(){
+  clearInterval(musT);musT=null;
+  if(bgm||audioUnlocked||S.set.mus)startBgm(audioUnlocked);
 }
-function musicSync(){clearInterval(musT);musT=null;if(S.set.mus&&AC){const h=HYMN[season==='xmas'?'xmas':season==='easter'?'easter':'main'];musTick();musT=setInterval(musTick,Math.round(h.beat*(h.span+2)*1000))}}
-document.addEventListener('pointerdown',()=>{const first=!AC;ac();if(first)setTimeout(musicSync,50)},true);
-function vib(ms){if(!S.set.vib)return;try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
+document.addEventListener('touchend',unlockAudio,true);
+document.addEventListener('click',unlockAudio,true);
+document.addEventListener('pointerdown',unlockAudio,true);
+function vib(ms){if(S.set.vib){try{if(navigator.vibrate)navigator.vibrate(ms)}catch(e){}}}
+function playTapClick(){
+  if(!S.set.tapsnd)return;
+  const now=performance.now();
+  if(now-lastTapSnd<50)return;
+  lastTapSnd=now;
+  try{
+    const a=ensureTapAud();
+    a.volume=Math.min(.4,(S.set.svol??.8)*.35);
+    try{a.currentTime=0}catch(e){}
+    const p=a.play();if(p&&p.catch)p.catch(()=>{});
+  }catch(e){}
+}
 function save(){S.t=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function add(n,noQ){S.d+=n;S.total+=n;S.run+=n;if(!noQ)qProg('earn',n);if(n>0)pwAdd(n)}
 // ---------- tap ----------
 function onTap(x,y){
   if(ev&&(ev.type==='fuse'||ev.type==='mic')){ev.got++;float(x,y,ev.type==='fuse'?'⚡':'🎤');vib(8);snd('click');if(ev.got>=ev.need)fixEvent();renderEvent();return}
-  const v=tapVal();add(v);S.taps++;qProg('tap',1);float(x,y,'+'+fmt(v));vib(10);snd('tap');
+  const v=tapVal();add(v);S.taps++;qProg('tap',1);float(x,y,'+'+fmt(v));vib(10);playTapClick();
   tapEl.classList.add('hit');setTimeout(()=>tapEl.classList.remove('hit'),80);
 }
-tapEl.addEventListener('pointerdown',e=>{e.preventDefault();onTap(e.clientX,e.clientY)});
+tapEl.addEventListener('pointerdown',e=>{unlockAudio();e.preventDefault();onTap(e.clientX,e.clientY)});
 document.addEventListener('dblclick',e=>e.preventDefault());
 document.addEventListener('gesturestart',e=>e.preventDefault());
 function float(x,y,t){const f=document.createElement('div');f.className='fl';f.textContent=t;f.style.left=(x-20+Math.random()*30)+'px';f.style.top=(y-30)+'px';document.body.appendChild(f);setTimeout(()=>f.remove(),900)}
@@ -1193,13 +1312,65 @@ function renderLoc(){
   else{$('#locBar i').style.width='100%';$('#locNext').textContent='Вы дошли до великого собрания! Слава Богу 🙏'}
 }
 // ---------- share ----------
+function renderInvite(){
+  const btn=$('#inviteBtn');
+  if(btn){
+    const next=S.refInvited>=10?'бонус максимум +50%':'+5% навсегда + сундук';
+    btn.innerHTML='🎁 Пригласи друга<small>'+next+'</small>';
+  }
+  if($('#ish')&&!$('#ish').hidden)renderInviteSheet();
+  setInviteVisible();
+}
+function setInviteVisible(){
+  const btn=$('#inviteBtn');if(!btn)return;
+  const overlay=!!panel||($('#ish')&&!$('#ish').hidden)||($('#modal')&&!$('#modal').hidden)||($('#mini')&&!$('#mini').hidden)||($('#tutor')&&!$('#tutor').hidden);
+  btn.hidden=!!overlay;
+}
+function renderInviteSheet(){
+  const box=$('#ishbox');if(!box)return;
+  const n=S.refInvited||0,pct=Math.min(REF_CAP,REF_PCT*n),url=inviteUrl();
+  box.innerHTML=`<div class="ishh"><b>🎁 Пригласи друга</b><button type="button" id="ishx" aria-label="Закрыть">✕</button></div>
+<div class="ishbody">
+  <div class="ishcard you"><b>Вы получите</b><p>За каждого нового игрока по вашей ссылке — <b>сундук с ${fmt(REF_CHEST)} добрых дел</b> и постоянные <b>+${REF_PCT}% к доходу</b> (максимум +${REF_CAP}%).</p></div>
+  <div class="ishcard pal"><b>Друг получит</b><p>Стартовый подарок — <b>${fmt(REF_GIFT)} добрых дел</b> сразу после входа по вашей ссылке.</p></div>
+  <div class="ishprog">Приглашено: <b>${n}</b> ${friendsWord(n)} · бонус: <b>+${pct}%</b></div>
+  <div class="ishlink"><input id="ishurl" readonly value="${esc(url)}" aria-label="Ссылка-приглашение"><button type="button" id="ishcopy">Копировать</button></div>
+  <button type="button" id="ishshare" class="big">📤 Поделиться</button>
+</div>`;
+  $('#ishx').onclick=()=>{snd('click');closeInvite()};
+  $('#ishcopy').onclick=()=>{snd('click');copyInviteLink()};
+  $('#ishshare').onclick=()=>{snd('click');shareInvite()};
+}
+function openInvite(){
+  const sh=$('#ish');if(!sh)return;
+  sh.hidden=false;renderInviteSheet();setInviteVisible();
+}
+function closeInvite(){
+  const sh=$('#ish');if(sh)sh.hidden=true;setInviteVisible();
+}
+async function copyInviteLink(){
+  const url=inviteUrl();
+  try{await navigator.clipboard.writeText(url);toast('📋 Ссылка скопирована — отправьте её другу!');return}catch(e){}
+  try{const ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('📋 Ссылка скопирована — отправьте её другу!')}catch(e){toast(url)}
+}
+async function shareInvite(){
+  const url=inviteUrl();
+  const text='Играю в «'+TITLE+'». Заходи по моей ссылке — получишь подарок в 500 добрых дел, а я немного укреплю приход!';
+  try{
+    if(navigator.share){
+      await navigator.share({title:TITLE,text,url});
+      return;
+    }
+  }catch(e){if(e&&e.name==='AbortError')return}
+  await copyInviteLink();
+}
 async function share(){
-  const text='Я сделал '+fmt(S.total)+' добрых дел в игре «'+TITLE+'»! Попробуй и ты:';
+  const text='Я сделал '+fmt(S.total)+' добрых дел в игре «'+TITLE+'»! Заходи по моей ссылке — получишь стартовый подарок:';
   S.shared=1;save();
   let card=null;try{card=await makeShareCard()}catch(e){}
   try{
     if(navigator.share){
-      const opts={title:TITLE,text,url:URL0};
+      const opts={title:TITLE,text,url:inviteUrl()};
       if(card&&card.blob){
         const file=new File([card.blob],'zavhoz-card.png',{type:'image/png'});
         if(!navigator.canShare||navigator.canShare({files:[file]}))opts.files=[file];
@@ -1208,7 +1379,7 @@ async function share(){
     }
   }catch(e){if(e&&e.name==='AbortError')return}
   if(card&&card.url){const a=document.createElement('a');a.href=card.url;a.download='zavhoz-card.png';document.body.appendChild(a);a.click();a.remove();toast('🖼 Карточка сохранена — отправьте её друзьям!')}
-  const full=text+' '+URL0;
+  const full=text+' '+inviteUrl();
   try{await navigator.clipboard.writeText(full);if(!card)toast('📋 Ссылка скопирована — отправьте друзьям!');return}catch(e){}
   try{const ta=document.createElement('textarea');ta.value=full;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();if(!card)toast('📋 Ссылка скопирована — отправьте друзьям!')}catch(e){toast(full)}
 }
@@ -1275,7 +1446,7 @@ function startMini(id){
   }[id];
   $('#mstage').innerHTML=`<div class="mg-intro"><div class="ic">${g.ic}</div><b>${g.n}</b><p>${how}</p><p>3 уровня · сложность ${d} · награда до ${cap} дел</p><button class="mg-go" type="button">Начать</button></div>`;
   $('#mstage').querySelector('.mg-go').onclick=()=>{snd('click');runMini(id)};
-  $('#mini').hidden=false;
+  $('#mini').hidden=false;setInviteVisible();
   snd('click');
 }
 function runMini(id){
@@ -1343,7 +1514,7 @@ function closeMini(){
   if(!mini)return;
   if(mini.phase==='res'&&mini.reward!=null&&!mini.claimed)claimMini();
   mini=null;
-  $('#mini').hidden=true;
+  $('#mini').hidden=true;setInviteVisible();
   $('#mstage').innerHTML='';
   $('#mhud').hidden=true;
   const b=$('#mbanner');if(b)b.remove();
@@ -1714,8 +1885,8 @@ let panel=null;
 function achProg(){return ACH.filter(a=>S.ach[a.id]).length+'/'+ACH.length}
 function setTitle(p){$('#ptitle').textContent={shop:'🛠 Улучшения',bld:'🏛 Здания',quest:'📅 Задания на сегодня',mini:'🎮 Мини-игры',parish:'🕊 Приход',board:'🏅 Таблица мест',ach:'🏆 Достижения · '+achProg(),info:'ℹ️ Об игре'}[p]}
 function syncTab(p){document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',!!p&&b.dataset.p===p));const bb=$('#boardBtn');if(bb)bb.classList.toggle('on',p==='board')}
-function openP(p){panel=p;$('#panel').hidden=false;setTitle(p);renderP(true);syncTab(p)}
-$('#pclose').onclick=()=>{panel=null;$('#panel').hidden=true;syncTab(null)};
+function openP(p){closeInvite();panel=p;$('#panel').hidden=false;setTitle(p);renderP(true);syncTab(p);setInviteVisible()}
+$('#pclose').onclick=()=>{panel=null;$('#panel').hidden=true;syncTab(null);setInviteVisible()};
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{snd('click');panel===b.dataset.p?$('#pclose').onclick():openP(b.dataset.p)});
 function untilMidnight(){const n=new Date(),m=new Date(n);m.setHours(24,0,0,0);return (m-n)/1000}
 function statsHtml(){
@@ -1787,7 +1958,7 @@ function renderP(full){
       const tg=(k,n)=>`<button class="tg ${S.set[k]?'on':''}" data-k="${k}">${n}: ${S.set[k]?'вкл':'выкл'}</button>`;
       b.innerHTML=`<button id="shareBtn" class="big">📤 Поделиться игрой</button>
 <div class="it col"><div class="tx"><b>🙏 Новый приход</b><br><span id="prest">${prestHtml()}</span></div><button id="prBtn" class="warn">Начать новый приход</button></div>
-<div class="it col"><div class="tx"><b>⚙️ Настройки</b></div><div class="tgs">${tg('snd','🔊 Звук')}${tg('mus','🎵 Музыка')}${tg('vib','📳 Вибрация')}</div>
+<div class="it col"><div class="tx"><b>⚙️ Настройки</b></div><div class="tgs">${tg('snd','🔊 Звук')}${tg('mus','🎵 Музыка')}${tg('vib','📳 Вибрация')}${tg('tapsnd','🔔 Звук нажатия')}</div>
 <div class="vol">🔊 <input id="svol" type="range" min="0" max="100" value="${Math.round((S.set.svol??.8)*100)}" aria-label="Громкость звуков"></div>
 <div class="vol">🎵 <input id="mvol" type="range" min="0" max="100" value="${Math.round((S.set.mvol??.45)*100)}" aria-label="Громкость музыки"></div></div>
 <div class="it"><div class="tx"><b>📊 Статистика</b><br><span id="statsBox">${statsHtml()}</span></div></div>
@@ -1798,9 +1969,9 @@ function renderP(full){
       $('#prBtn').onclick=askPrestige;
       const sv=$('#svol'),mv=$('#mvol');
       if(sv)sv.oninput=()=>{S.set.svol=sv.value/100;S.set.snd=S.set.svol>0?1:0;save()};
-      if(mv)mv.oninput=()=>{S.set.mvol=mv.value/100;if(musGain)musGain.gain.value=S.set.mvol;S.set.mus=S.set.mvol>0?1:0;if(AC)musicSync();save()};
+      if(mv)mv.oninput=()=>{S.set.mvol=mv.value/100;if(musGain)musGain.gain.value=S.set.mvol;if(bgm)bgm.volume=S.set.mvol;S.set.mus=S.set.mvol>0?1:0;musicSync();save()};
 
-      b.querySelectorAll('.tg').forEach(x=>x.onclick=()=>{const k=x.dataset.k;S.set[k]=S.set[k]?0:1;if(k==='mus')musicSync();if(k==='vib'&&S.set.vib)vib(30);save();renderP(true)});
+      b.querySelectorAll('.tg').forEach(x=>x.onclick=()=>{const k=x.dataset.k;S.set[k]=S.set[k]?0:1;if(k==='mus')musicSync();if(k==='vib'&&S.set.vib)vib(30);if(k==='tapsnd'&&S.set.tapsnd)playTapClick();save();renderP(true)});
       b.querySelectorAll('.st[data-i]').forEach(x=>x.onclick=()=>showStory(+x.dataset.i,false));
       $('#reset').onclick=()=>{if(confirm('Стереть весь прогресс, благословения и достижения?')){localStorage.removeItem(KEY);location.reload()}};
     }
@@ -1870,11 +2041,16 @@ if($('#tnext'))$('#tnext').onclick=()=>{snd('click');if(tutI<TUTOR.length-1){tut
 renderChurch();spawnWalkers();mountBits();startNet();
 if($('#live'))$('#live').onclick=()=>{snd('click');panel==='board'?$('#pclose').onclick():openP('board')};
 if($('#boardBtn'))$('#boardBtn').onclick=()=>{snd('click');panel==='board'?$('#pclose').onclick():openP('board')};
+if($('#inviteBtn'))$('#inviteBtn').onclick=()=>{snd('click');openInvite()};
+const ish=$('#ish');if(ish)ish.addEventListener('click',e=>{if(e.target===ish)closeInvite()});
+try{ensureBgm();ensureTapAud()}catch(e){}
+renderInvite();
 if(!S.tut)setTimeout(showTutor,350);
 else setTimeout(bootModals,400);
 requestAnimationFrame(frame);
 setInterval(save,5000);
-document.addEventListener('visibilitychange',()=>{if(document.hidden){save();if(AC)AC.suspend()}else if(AC&&(S.set.mus||S.set.snd))AC.resume()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){save();if(AC)try{AC.suspend()}catch(e){};if(bgm)try{bgm.pause()}catch(e){}}else resumeAudio()});
+window.addEventListener('pageshow',resumeAudio);
 window.addEventListener('pagehide',save);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-window.__game={S,TITLE,API,net,startEvent,openP,spawnBadge,offlineModal,showStory,askPrestige,startMini,closeMini,showTutor,showVerse,showSeasonBonus,applySeason,makeShareCard,pwEnsure,setTime,startRain,stopRain,showZavhoz,spawnEgg,ringBell,spawnWalkers,tickWalkers,setWalkN:n=>{walkForceN=n==null?null:n;spawnWalkers()},getWalkers:()=>walkers.map(w=>({x:w.x,y:w.y,state:w.state,t:w.t,kind:w.kind,item:w.item,op:w.op,side:w.side})),netPing,netScore,netTop,ensurePid,ensureNick,get ev(){return ev},get badge(){return badge},get mini(){return mini},get season(){return season}};
+window.__game={S,TITLE,API,net,startEvent,openP,spawnBadge,offlineModal,showStory,askPrestige,startMini,closeMini,showTutor,showVerse,showSeasonBonus,applySeason,makeShareCard,pwEnsure,setTime,startRain,stopRain,showZavhoz,spawnEgg,ringBell,spawnWalkers,tickWalkers,setWalkN:n=>{walkForceN=n==null?null:n;spawnWalkers()},getWalkers:()=>walkers.map(w=>({x:w.x,y:w.y,state:w.state,t:w.t,kind:w.kind,item:w.item,op:w.op,side:w.side})),netPing,netScore,netTop,netMeAndClaim,ensurePid,ensureNick,refCode,inviteUrl,openInvite,closeInvite,shareInvite,unlockAudio,getAudio:()=>({ac:AC&&AC.state,unlocked:audioUnlocked,bgm:!!(bgm&&!bgm.paused),bgmSrc:bgm&&bgm.src}),get ev(){return ev},get badge(){return badge},get mini(){return mini},get season(){return season}};
