@@ -6,9 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Завхоз">
+<meta name="apple-mobile-web-app-title" content="Завхоз церкви">
 <meta name="theme-color" content="#2b1d14">
-<title>Завхоз Слова жизни</title>
+<title>Завхоз церкви</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="img/icon-180.png">
 <link rel="icon" href="img/icon-192.png">
@@ -36,16 +36,23 @@
 </header>
 <main id="play">
   <div id="event" hidden></div>
-  <button id="tap" aria-label="Нажимай!"><img src="img/church1.webp" alt="Церковь" draggable="false"></button>
+  <div id="scene">
+    <div id="fx" aria-hidden="true"></div>
+    <div id="walk" aria-hidden="true"></div>
+    <div id="bits"></div>
+    <button id="tap" aria-label="Нажимай!"><img src="img/church1.webp" alt="Церковь" draggable="false"></button>
+    <div id="seasons" aria-hidden="true"></div>
+  </div>
   <div id="hint">Нажимай на церковь — делай добрые дела!</div>
 </main>
 <nav id="tabs">
-  <button data-p="shop"><i>🛠</i>Улучшения</button>
+  <button data-p="shop"><i>🛠</i>Улучш.</button>
   <button data-p="bld"><i>🏛</i>Здания</button>
   <button data-p="quest"><i>📅</i>Задания<em id="qdot" hidden></em></button>
   <button data-p="mini"><i>🎮</i>Игры<em id="mgdot" hidden></em></button>
+  <button data-p="parish"><i>🕊</i>Приход</button>
   <button data-p="ach"><i>🏆</i>Награды</button>
-  <button data-p="info"><i>ℹ️</i>Об игре</button>
+  <button data-p="info"><i>ℹ️</i>Ещё</button>
 </nav>
 <section id="panel" hidden>
   <div class="ph"><b id="ptitle"></b><button id="pclose" aria-label="Закрыть">✕</button></div>
@@ -57,6 +64,15 @@
   <div id="mhud" hidden></div>
   <div id="mstage"></div>
   <div id="mstatus"></div>
+</div>
+<div id="tutor" hidden>
+  <div class="tbox">
+    <div id="tstep"></div>
+    <div class="tbtns">
+      <button type="button" id="tskip" class="ghost">Пропустить</button>
+      <button type="button" id="tnext">Далее</button>
+    </div>
+  </div>
 </div>
 <div id="toast"></div>
 <div id="modal" hidden><div class="mbox"><div id="mtext"></div><div id="mbtns"></div></div></div>

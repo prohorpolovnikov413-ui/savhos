@@ -86,6 +86,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#2b1d14;color:#fff;fon
 .stl .st{background:#5b3a22!important;text-align:left;font-size:13px!important;min-height:40px!important;padding:0 10px!important;font-weight:600!important}
 .stl .st:disabled{opacity:.45}
 #panel button.big{width:100%;background:#2f7d3a;font-weight:800;font-size:16px;margin-bottom:8px}
+#panel button.big:disabled{background:#555;opacity:.7}
 #blessS{background:#a8691acc!important}
 #stats span{white-space:nowrap}
 @media(max-width:360px){#stats{gap:5px;font-size:12px}#stats span{padding:3px 7px}.tgs .tg{font-size:11px!important}}
@@ -195,3 +196,109 @@ html,body{margin:0;height:100%;overflow:hidden;background:#2b1d14;color:#fff;fon
 .grw .cell.stairs{background:#5c4a2acc;border-color:#ffc94a}
 .grw .cell.mov{box-shadow:0 0 0 2px #ffc94a55}
 .grw .cell.item{z-index:1}
+
+/* --- v10 polish --- */
+#tabs button{font-size:9px;padding:2px 0}
+#tabs button i{font-size:16px}
+@media(max-width:400px){#tabs button{font-size:8px}#tabs button i{font-size:15px}}
+#scene{position:relative;display:flex;align-items:center;justify-content:center;width:min(86vw,340px);height:min(86vw,340px)}
+#fx,#seasons{position:absolute;inset:-18% -8% 0;pointer-events:none;overflow:hidden;border-radius:24px}
+#walk{position:absolute;inset:-10% -8% -14%;pointer-events:none;overflow:hidden;z-index:3}
+#tap{position:relative;z-index:2;background:none;overflow:hidden}
+body.night #tap{box-shadow:0 8px 30px #000a,0 0 0 8px #ffc94a33,0 0 28px #ffe27a44}
+body.night #shade{background:linear-gradient(#000c,#0005 35%,#0005 60%,#000d)}
+.flake,.puff{position:absolute;border-radius:50%;background:#fff;opacity:.85;animation:fall linear infinite;pointer-events:none}
+.puff{background:#fff8;animation:rise 5s ease-out infinite}
+@keyframes fall{from{transform:translateY(-8%) rotate(0)}to{transform:translateY(110%) rotate(220deg)}}
+@keyframes rise{from{transform:translateY(0) scale(.6);opacity:.5}to{transform:translateY(-80px) scale(1.3);opacity:0}}
+.walker{position:absolute;left:0;top:0;width:26px;height:44px;margin:0;padding:0;border:0;background:none;pointer-events:none;transform-origin:50% 100%;filter:drop-shadow(0 2px 1px #0005);will-change:transform,opacity}
+.walker.kid{width:18px;height:32px}
+.walker.grandma{width:26px;height:42px}
+.walker svg{width:100%;height:100%;display:block;overflow:visible}
+.walker .fig{display:block;width:100%;height:100%;transform-origin:50% 100%;animation:wbob .38s ease-in-out infinite}
+.walker.kid .fig{animation-duration:.24s}
+.walker.grandma .fig{animation-duration:.7s}
+.walker.idle .fig{animation:none}
+@keyframes wbob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-2.5px) rotate(2deg)}}
+.walker .leg{transform-box:fill-box;transform-origin:50% 0;animation:legstep .38s ease-in-out infinite}
+.walker .leg.front{animation-delay:-.19s}
+.walker.kid .leg{animation-duration:.24s}
+.walker.grandma .leg{animation-duration:.7s}
+.walker.idle .leg{animation:none}
+@keyframes legstep{0%,100%{transform:rotate(22deg)}50%{transform:rotate(-22deg)}}
+.walker .cane{transform-box:fill-box;transform-origin:100% 0;animation:cane .7s ease-in-out infinite}
+.walker.idle .cane{animation:none}
+@keyframes cane{0%,100%{transform:rotate(6deg)}50%{transform:rotate(-4deg)}}
+.walker .item{position:absolute;z-index:2;pointer-events:none}
+.walker .item.bag{width:12px;height:14px;left:16px;top:22px}
+.walker.kid .item.bag{left:11px;top:16px;width:9px;height:11px}
+.walker .item.flowers{width:14px;height:16px;left:15px;top:14px}
+.walker.kid .item.flowers{left:10px;top:10px;width:11px;height:13px}
+.walker.has-umb .umb{display:block}
+.garland{position:absolute;left:6%;right:6%;top:4%;height:18px;pointer-events:none;z-index:3}
+.xmas-tree{position:absolute;right:1%;bottom:10%;width:54px;height:78px;z-index:3;pointer-events:none}
+.snowman{position:absolute;left:1%;bottom:24%;width:48px;height:70px;z-index:3;pointer-events:none;filter:drop-shadow(0 2px 2px #0004)}
+.easter-fl{position:absolute;bottom:8%;width:40px;height:48px;z-index:3;pointer-events:none}
+.easter-fl.l{left:2%}
+.easter-fl.r{right:2%}
+
+#tutor{position:fixed;inset:0;background:#000a;z-index:9;display:flex;align-items:flex-end;justify-content:center;padding:16px 16px calc(env(safe-area-inset-bottom) + 80px)}
+#tutor[hidden]{display:none!important}
+.tbox{background:#3a2a1e;border:2px solid #ffc94a;border-radius:16px;padding:16px;max-width:360px;width:100%;text-align:center}
+#tstep{font-size:16px;line-height:1.45;margin-bottom:8px}
+#tstep .ic{font-size:42px;display:block;margin-bottom:6px}
+#tstep b{display:block;font-size:20px;margin-bottom:6px}
+.tbtns{display:flex;gap:8px;margin-top:12px}
+.tbtns button{flex:1;font:inherit;color:#fff;border:0;border-radius:12px;min-height:48px;font-weight:800;background:#2f7d3a;cursor:pointer}
+.tbtns .ghost{background:#fff2;font-weight:600}
+#tutor .dots{margin-top:8px;letter-spacing:4px;color:#ffc94a;font-size:18px}
+body.tut-hl #tap{z-index:10;box-shadow:0 0 0 6px #ffc94a,0 0 28px #ffc94acc}
+body.tut-hl2 #tabs button[data-p="shop"]{z-index:10;box-shadow:0 0 0 3px #ffc94a}
+body.tut-hl3 #tabs button[data-p="quest"],body.tut-hl3 #tabs button[data-p="mini"]{z-index:10;box-shadow:0 0 0 3px #ffc94a}
+
+.verse-ref{display:block;margin-top:8px;opacity:.85;font-size:14px}
+.pwbar{height:10px;background:#fff3;border-radius:6px;margin:8px 0;overflow:hidden}
+.pwbar i{display:block;height:100%;width:0;background:#ffc94a;transition:width .35s}
+.parish-note{font-size:12px;opacity:.8;margin:8px 0 0;line-height:1.4}
+.it.goal .ic{font-size:34px}
+.vol{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px}
+.vol input[type=range]{flex:1;accent-color:#ffc94a}
+#sharePrev{display:block;width:100%;border-radius:12px;margin:8px 0;background:#2b1d14}
+
+#bits{position:absolute;inset:-18% -8% 0;z-index:4;pointer-events:none}
+#bits .bit{position:absolute;background:none;border:0;padding:0;margin:0;pointer-events:none;line-height:0}
+#bits .bit.bell,#bits .bit.zavh,#bits .bit.egg{pointer-events:auto;cursor:pointer;touch-action:manipulation}
+#bits .bit svg{width:100%;height:100%;display:block}
+.cat{top:16%;width:40px;height:24px;animation:catwalk 16s linear infinite;z-index:4;filter:drop-shadow(0 2px 1px #0004)}
+@keyframes catwalk{0%{left:-12%;transform:scaleX(1)}48%{left:92%;transform:scaleX(1)}50%{left:92%;transform:scaleX(-1)}98%{left:-12%;transform:scaleX(-1)}100%{left:-12%;transform:scaleX(1)}}
+.bird{position:absolute;width:28px;height:16px;animation:fly 12s linear infinite;filter:drop-shadow(0 1px 1px #0003)}
+@keyframes fly{0%{left:-12%;transform:translateY(0)}50%{transform:translateY(8px)}100%{left:112%;transform:translateY(-4px)}}
+.bird svg .wing{transform-box:fill-box;transform-origin:center;animation:flap .35s ease-in-out infinite}
+@keyframes flap{50%{transform:translateY(-3px)}}
+.bench{left:0;bottom:1%;width:80px;height:58px;z-index:4;filter:drop-shadow(0 2px 2px #0004)}
+.bell{top:14%;left:62%;width:36px;height:44px;z-index:5;transform-origin:50% 0;filter:drop-shadow(0 2px 2px #0005)}
+.bell.ring{animation:swing .28s ease-in-out 4}
+@keyframes swing{0%,100%{transform:rotate(0)}25%{transform:rotate(16deg)}75%{transform:rotate(-16deg)}}
+.moon{top:4%;right:3%;width:36px;height:36px;display:none;filter:drop-shadow(0 0 8px #ffe9a866)}
+body.night .moon{display:block}
+.zavh{right:1%;bottom:10%;width:44px;height:78px;animation:zavin .45s ease-out;z-index:5;filter:drop-shadow(0 2px 2px #0005)}
+@keyframes zavin{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+.zavh.gone{opacity:.45}
+.egg{width:36px;height:36px;z-index:5;animation:eggpulse 1.2s ease-in-out infinite;filter:drop-shadow(0 2px 3px #0006)}
+@keyframes eggpulse{50%{transform:scale(1.12)}}
+.egg.tl{top:20%;left:4%}
+.egg.tr{top:26%;right:4%}
+.egg.bl{bottom:30%;left:4%}
+.egg.br{bottom:30%;right:10%}
+.star{position:absolute;background:#fff;border-radius:50%;opacity:.85;animation:twinkle 2.4s ease-in-out infinite;pointer-events:none}
+@keyframes twinkle{50%{opacity:.25}}
+.drop{position:absolute;width:3px;background:linear-gradient(#fff0,#e8f4ff 30%,#9ecfff);border-radius:2px;animation:raindrop linear infinite;pointer-events:none;opacity:.9}
+@keyframes raindrop{from{transform:translateY(-10%)}to{transform:translateY(130%)}}
+.walker .umb{position:absolute;left:-4px;top:-12px;width:34px;height:22px;display:none;z-index:3}
+.walker.kid .umb{left:-8px;top:-14px;width:28px;height:18px}
+body.rain .walker .umb,.walker.has-umb .umb{display:block}
+body.rain .walker .item{visibility:hidden}
+
+@media (prefers-reduced-motion:reduce){
+  .flake,.puff,.walker,.walker .fig,.walker .leg,.walker .cane,.garland,.cat,.bird,.drop,.egg,.star{animation:none!important}
+}

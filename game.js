@@ -132,6 +132,727 @@ if(S.intro==null)S.intro=fresh||!S.total?0:1;
 if(!S.mg)S.mg={cd:{},n:{},best:{}};
 if(!S.mg.cd)S.mg.cd={};if(!S.mg.n)S.mg.n={};if(!S.mg.best)S.mg.best={};
 if(!S.mg.diff)S.mg.diff={};if(!S.mg.bestScore)S.mg.bestScore={};
+if(S.tut==null)S.tut=(fresh||!S.total)?0:1;
+if(S.set.svol==null)S.set.svol=.8;if(S.set.mvol==null)S.set.mvol=.45;
+const TITLE='Завхоз церкви';
+const DAYV=[
+ ['Возлюби ближнего твоего, как самого себя','Мф 22:39'],
+ ['Блаженны милостивые, ибо они помилованы будут','Мф 5:7'],
+ ['Вы — свет мира','Мф 5:14'],
+ ['Да будет воля Твоя и на земле, как на небе','Мф 6:10'],
+ ['Ищите же прежде Царства Божия','Мф 6:33'],
+ ['Просите, и дано будет вам','Мф 7:7'],
+ ['Итак во всём, как хотите, чтобы с вами поступали люди, так поступайте и вы с ними','Мф 7:12'],
+ ['Придите ко Мне, все труждающиеся и обременённые','Мф 11:28'],
+ ['Что вы хотите, чтобы Я сделал вам?','Мк 10:36'],
+ ['Веруйте в Бога и в Меня веруйте','Ин 14:1'],
+ ['Я есмь путь и истина и жизнь','Ин 14:6'],
+ ['Да любите друг друга','Ин 13:34'],
+ ['Мир оставляю вам, мир Мой даю вам','Ин 14:27'],
+ ['Нет больше той любви, как если кто положит душу свою за друзей своих','Ин 15:13'],
+ ['Всё могу в укрепляющем меня Иисусе Христе','Флп 4:13'],
+ ['Радуйтесь всегда в Господе','Флп 4:4'],
+ ['И мир Божий, который превыше всякого ума, соблюдёт сердца ваши','Флп 4:7'],
+ ['Всё, что делаете, делайте от души, как для Господа','Кол 3:23'],
+ ['Слово Христово да вселяется в вас обильно','Кол 3:16'],
+ ['Всегда радуйтесь. Непрестанно молитесь. За всё благодарите','1 Фес 5:16–18'],
+ ['Друг друга тяготы носите','Гал 6:2'],
+ ['Делая добро, да не унываем','Гал 6:9'],
+ ['Любовью служите друг другу','Гал 5:13'],
+ ['Плод же духа: любовь, радость, мир','Гал 5:22'],
+ ['Бог есть любовь','1 Ин 4:8'],
+ ['Мы любим Его, потому что Он прежде возлюбил нас','1 Ин 4:19'],
+ ['Будем любить не словом или языком, но делом и истиною','1 Ин 3:18'],
+ ['Всё у вас да будет с любовью','1 Кор 16:14'],
+ ['Любовь никогда не перестаёт','1 Кор 13:8'],
+ ['Теперь пребывают сии три: вера, надежда, любовь; но любовь из них больше','1 Кор 13:13'],
+ ['Посему, едите ли, пьёте ли, или иное что делаете, всё делайте в славу Божию','1 Кор 10:31'],
+ ['Благодать вам и мир от Бога Отца нашего','Рим 1:7'],
+ ['Любящим Бога, призванным по Его изволению, всё содействует ко благу','Рим 8:28'],
+ ['Радуйтесь с радующимися и плачьте с плачущими','Рим 12:15'],
+ ['Если возможно с вашей стороны, будьте в мире со всеми людьми','Рим 12:18'],
+ ['Не будь побеждён злом, но побеждай зло добром','Рим 12:21'],
+ ['Бог же надежды да исполнит вас всякой радости и мира в вере','Рим 15:13'],
+ ['Благодать Господа нашего Иисуса Христа со всеми вами','Рим 16:24'],
+ ['Господь — Пастырь мой; я ни в чём не буду нуждаться','Пс 22:1'],
+ ['Вот, благословите Господа, все рабы Господни','Пс 133:1'],
+ ['Хвалите Господа, ибо Он благ, ибо вовек милость Его','Пс 135:1'],
+ ['Надейся на Господа всем сердцем твоим','Притч 3:5'],
+ ['Во всех путях твоих познавай Его','Притч 3:6'],
+ ['Доброе имя лучше большого богатства','Притч 22:1'],
+ ['Кроткий ответ отвращает гнев','Притч 15:1'],
+ ['Страх Господень — начало мудрости','Притч 9:10'],
+ ['Блаженны слышащие слово Божие и соблюдающие его','Лк 11:28'],
+ ['Какою мерою мерите, такою отмерено будет и вам','Лк 6:38'],
+ ['Не бойся, только веруй','Лк 8:50'],
+ ['Ибо у Бога не останется бессильным никакое слово','Лк 1:37'],
+ ['Слава в вышних Богу, и на земле мир','Лк 2:14'],
+ ['Так да светит свет ваш пред людьми','Мф 5:16'],
+ ['Довольно для каждого дня своей заботы','Мф 6:34'],
+ ['Невозможно служить Богу и маммоне','Мф 6:24'],
+ ['Даром получили, даром давайте','Мф 10:8'],
+ ['Где двое или трое собраны во имя Моё, там Я посреди них','Мф 18:20'],
+ ['Се, Я с вами во все дни до скончания века','Мф 28:20'],
+ ['Научитесь от Меня, ибо Я кроток и смирен сердцем','Мф 11:29'],
+ ['Блаженнее давать, нежели принимать','Деян 20:35'],
+ ['Вера же есть осуществление ожидаемого и уверенность в невидимом','Евр 11:1'],
+ ['Иисус Христос вчера и сегодня и вовеки тот же','Евр 13:8'],
+ ['Бог нам прибежище и сила','Пс 45:2'],
+ ['Вкусите и увидите, как благ Господь','Пс 33:9']
+];
+
+function isoWeekKey(d){
+  d=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const day=(d.getDay()+6)%7;
+  d.setDate(d.getDate()-day+3);
+  const first=new Date(d.getFullYear(),0,4);
+  const week=1+Math.round((d-first)/86400000/7);
+  return d.getFullYear()+'-W'+String(week).padStart(2,'0');
+}
+function easterWestern(Y){
+  const a=Y%19,b=Math.floor(Y/100),c=Y%100,d=Math.floor(b/4),e=b%4;
+  const f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3);
+  const h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4;
+  const l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451);
+  const month=Math.floor((h+l-7*m+114)/31),day=((h+l-7*m+114)%31)+1;
+  return new Date(Y,month-1,day);
+}
+function easterOrthodox(Y){
+  const a=Y%4,b=Y%7,c=Y%19,d=(19*c+15)%30,e=(2*a+4*b-d+34)%7;
+  const month=Math.floor((d+e+114)/31),day=((d+e+114)%31)+1;
+  const dt=new Date(Y,month-1,day);
+  dt.setDate(dt.getDate()+(Y>=2100?14:13));
+  return dt;
+}
+function nearDay(a,b,days){return Math.abs((a-b)/86400000)<=days}
+function detectSeason(now){
+  const q=(new URLSearchParams(location.search).get('season')||'').toLowerCase();
+  if(q==='xmas'||q==='christmas')return 'xmas';
+  if(q==='easter')return 'easter';
+  if(q==='none'||q==='off')return '';
+  now=now||new Date();
+  const m=now.getMonth(),d=now.getDate();
+  if(m===11||(m===0&&d<=14))return 'xmas';
+  const Y=now.getFullYear();
+  if(nearDay(now,easterWestern(Y),7)||nearDay(now,easterOrthodox(Y),7))return 'easter';
+  if(m===0&&nearDay(now,easterWestern(Y-1),7))return 'easter';
+  return '';
+}
+let season='';
+function applySeason(force){
+  season=(force!=null)?force:detectSeason();
+  document.body.classList.toggle('season-xmas',season==='xmas');
+  document.body.classList.toggle('season-easter',season==='easter');
+  document.body.classList.toggle('night',isNight());
+  renderSeasonDeco();
+  if(shownChurch){shownChurch=0;renderChurch()}
+  if(AC&&S.set.mus)musicSync();
+}
+function renderSeasonDeco(){
+  const box=$('#seasons');if(!box)return;
+  if(season==='xmas'){
+    box.innerHTML='<div class="garland">'+xmasGarland()+'</div><div class="xmas-tree">'+xmasTree()+'</div><div class="snowman">'+snowmanSVG()+'</div>';
+    fillSnow(18);
+  }else if(season==='easter'){
+    box.innerHTML='<div class="easter-fl l">'+easterFlowers()+'</div><div class="easter-fl r">'+easterFlowers()+'</div>';
+    fillSnow(0);
+  }else{box.innerHTML='';fillSnow(0)}
+}
+function xmasGarland(){
+  let s='<svg viewBox="0 0 300 20" xmlns="http://www.w3.org/2000/svg">';
+  s+='<path d="M0 6 Q75 18 150 6 T300 6" fill="none" stroke="#2f7d3a" stroke-width="3"/>';
+  for(let i=0;i<13;i++){const x=12+i*22,y=6+((i%2)?8:-2),c=['#e23d3d','#ffc94a','#3dcc6a','#f4f4f4'][i%4];
+    s+=`<circle cx="${x}" cy="${y}" r="4.2" fill="${c}"/>`}
+  return s+'</svg>';
+}
+function xmasTree(){
+  return `<svg viewBox="0 0 54 78" xmlns="http://www.w3.org/2000/svg">
+    <rect x="23" y="62" width="8" height="14" rx="2" fill="#6a3a1a"/>
+    <polygon points="27,4 50,34 4,34" fill="#2f7d3a"/>
+    <polygon points="27,16 52,48 2,48" fill="#2a7034"/>
+    <polygon points="27,30 53,66 1,66" fill="#25662e"/>
+    <circle cx="20" cy="28" r="2.2" fill="#e23d3d"/>
+    <circle cx="34" cy="36" r="2.2" fill="#ffc94a"/>
+    <circle cx="18" cy="46" r="2.2" fill="#fff"/>
+    <circle cx="36" cy="54" r="2.2" fill="#e23d3d"/>
+    <polygon points="27,0 30,8 22,8" fill="#ffc94a"/>
+  </svg>`;
+}
+function easterFlowers(){
+  return `<svg viewBox="0 0 40 48" xmlns="http://www.w3.org/2000/svg">
+    <rect x="18" y="22" width="4" height="24" rx="2" fill="#3d8a4a"/>
+    <ellipse cx="20" cy="16" rx="7" ry="10" fill="#f7d6ea" transform="rotate(-20 20 16)"/>
+    <ellipse cx="20" cy="16" rx="7" ry="10" fill="#f4cfe8" transform="rotate(20 20 16)"/>
+    <ellipse cx="20" cy="16" rx="7" ry="10" fill="#fff0f7" transform="rotate(60 20 16)"/>
+    <circle cx="20" cy="16" r="3" fill="#ffc94a"/>
+    <ellipse cx="8" cy="40" rx="5" ry="3.2" fill="#f3d27a"/>
+    <ellipse cx="32" cy="42" rx="5" ry="3.2" fill="#f7efe4"/>
+  </svg>`;
+}
+function fillSnow(n){
+  const fx=$('#fx');if(!fx)return;
+  fx.querySelectorAll('.flake').forEach(e=>e.remove());
+  for(let i=0;i<n;i++){
+    const e=document.createElement('i');e.className='flake';
+    const sz=3+Math.random()*5;
+    e.style.cssText=`left:${Math.random()*100}%;top:${-10-Math.random()*40}%;width:${sz}px;height:${sz}px;animation-duration:${7+Math.random()*8}s;animation-delay:${-Math.random()*8}s;opacity:${.5+Math.random()*.45}`;
+    fx.appendChild(e);
+  }
+}
+function fillSmoke(){
+  const fx=$('#fx');if(!fx)return;
+  fx.querySelectorAll('.puff').forEach(e=>e.remove());
+  for(let i=0;i<3;i++){
+    const e=document.createElement('i');e.className='puff';
+    e.style.cssText=`left:49%;top:10%;width:${6+i*2}px;height:${6+i*2}px;animation-delay:${i*1.4}s`;
+    fx.appendChild(e);
+  }
+}
+function personSVG(skin,shirt,hair,kind){
+  const pants=kind==='kid'?'#3d6aad':'#3d4a6b';
+  const pants2=kind==='kid'?'#345c96':'#33405c';
+  if(kind==='grandma'){
+    return `<svg viewBox="0 0 28 48" xmlns="http://www.w3.org/2000/svg">
+      <line class="cane" x1="24" y1="16" x2="26" y2="46" stroke="#6a3a1a" stroke-width="1.7" stroke-linecap="round"/>
+      <rect class="leg back" x="10" y="30" width="3" height="13" rx="1.4" fill="#5a4060"/>
+      <rect class="leg front" x="15" y="30" width="3" height="13" rx="1.4" fill="#4a3250"/>
+      <path d="M8 20 Q14 16 20 20 L19 34 Q14 37 9 34 Z" fill="#6a4a8a"/>
+      <circle cx="15" cy="10" r="5.6" fill="${skin}"/>
+      <path d="M9.5 10 Q15 2 20.5 10 Q18 8 15 8 Q12 8 9.5 10" fill="${hair}"/>
+      <circle cx="18" cy="8" r="2.1" fill="${hair}"/>
+      <circle cx="17.6" cy="10" r=".7" fill="#2a2a2a"/>
+      <path d="M14 12.4 Q16 13.4 18 12.4" fill="none" stroke="#c48a7a" stroke-width=".8"/>
+      <path d="M20 18 L23 28" stroke="${skin}" stroke-width="2" stroke-linecap="round"/>
+    </svg>`;
+  }
+  const hr=kind==='kid'?5.6:6.1, hx=kind==='kid'?15:15.2, hy=kind==='kid'?8:9;
+  const by=kind==='kid'?20:22, brx=kind==='kid'?5:6, bry=kind==='kid'?7:9;
+  const ly=kind==='kid'?26:29, lh=kind==='kid'?12:14;
+  return `<svg viewBox="0 0 28 48" xmlns="http://www.w3.org/2000/svg">
+    <rect class="leg back" x="10" y="${ly}" width="3.1" height="${lh}" rx="1.5" fill="${pants}"/>
+    <ellipse cx="14" cy="${by}" rx="${brx}" ry="${bry}" fill="${shirt}"/>
+    <rect class="leg front" x="15.2" y="${ly}" width="3.1" height="${lh}" rx="1.5" fill="${pants2}"/>
+    <path d="M16 ${by-4} L21 ${by+6}" stroke="${skin}" stroke-width="2.1" stroke-linecap="round"/>
+    <circle cx="${hx}" cy="${hy}" r="${hr}" fill="${skin}"/>
+    <ellipse cx="${hx}" cy="${hy-3}" rx="${hr-.3}" ry="3" fill="${hair}"/>
+    <circle cx="${hx+3}" cy="${hy}" r=".8" fill="#2a2a2a"/>
+  </svg>`;
+}
+function bagSVG(){
+  return `<svg viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg"><path d="M3 5 H11 L10 13 H4 Z" fill="#8a5a32" stroke="#6a3a1a" stroke-width=".8"/><path d="M5 5 Q7 2 9 5" fill="none" stroke="#6a3a1a" stroke-width="1.2"/></svg>`;
+}
+function flowerSVG(){
+  return `<svg viewBox="0 0 14 16" xmlns="http://www.w3.org/2000/svg"><path d="M7 16 V7" stroke="#2f7d3a" stroke-width="1.3"/><circle cx="7" cy="5" r="2.1" fill="#e23d3d"/><circle cx="4.6" cy="6.2" r="1.7" fill="#f3d27a"/><circle cx="9.4" cy="6.2" r="1.7" fill="#f7d6ea"/><circle cx="7" cy="5.2" r=".8" fill="#ffc94a"/></svg>`;
+}
+
+let walkers=[], walkForceN=null, walkReduce=null;
+function walkWanted(){
+  if(walkForceN!=null)return Math.max(0,Math.min(8,walkForceN|0));
+  const st=churchStage(S),p=people(S);
+  let n=3+Math.floor((st-1)/2);
+  if(p>=200)n++;
+  if(p>=1000)n++;
+  return Math.max(2,Math.min(8,n));
+}
+function walkLayout(){
+  const box=$('#walk'),tap=$('#tap');
+  if(!box||!tap)return null;
+  const b=box.getBoundingClientRect(),t=tap.getBoundingClientRect();
+  if(b.width<8||b.height<8)return null;
+  const dx=x=>(x-b.left)/b.width*100, dy=y=>(y-b.top)/b.height*100;
+  return {
+    door:{x:dx(t.left+t.width*.5), y:dy(t.top+t.height*.80)},
+    front:{x:dx(t.left+t.width*.5), y:dy(t.top+t.height*.99)},
+    groundY:dy(t.bottom)+1.6,
+    leftX:1.5, rightX:98.5
+  };
+}
+function polyAt(pts,t){
+  t=Math.max(0,Math.min(1,t));
+  let len=0;const seg=[];
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1],l=Math.hypot(b.x-a.x,b.y-a.y)||.001;
+    seg.push(l);len+=l;
+  }
+  let d=t*len;
+  for(let i=0;i<seg.length;i++){
+    if(d<=seg[i]||i===seg.length-1){
+      const k=d/seg[i],a=pts[i],b=pts[i+1];
+      return {x:a.x+(b.x-a.x)*k,y:a.y+(b.y-a.y)*k};
+    }
+    d-=seg[i];
+  }
+  return pts[pts.length-1];
+}
+function walkPath(L,side,lane,dir){
+  const gy=L.groundY+lane*3.4;
+  const edgeX=side<0?L.leftX:L.rightX;
+  const mid={x:L.front.x+side*7, y:L.front.y+lane*2.1};
+  const door={x:L.door.x+side*1.1, y:L.door.y};
+  const start={x:edgeX, y:gy};
+  return dir==='in'?[start,mid,door]:[door,mid,start];
+}
+function walkerKind(){
+  const r=Math.random();
+  if(r<.2)return 'kid';
+  if(r<.36)return 'grandma';
+  return 'adult';
+}
+function walkerItem(kind){
+  if(kind==='grandma')return null;
+  const r=Math.random();
+  if(r<.22)return 'bag';
+  if(r<.38)return 'flowers';
+  return null;
+}
+function makeWalker(box,scatter){
+  const skins=['#f3c7a3','#e8b48a','#c48a5a','#8d5a3a'];
+  const shirts=['#4a7ec8','#c44a4a','#2f7d3a','#a8691a','#6b4a9a','#c47a3a'];
+  const hair=['#3a2a1e','#6a3a1a','#d4c08a','#1a1a1a','#8a8a8a'];
+  const kind=walkerKind();
+  const item=walkerItem(kind);
+  const skin=skins[Math.floor(Math.random()*skins.length)];
+  const shirt=shirts[Math.floor(Math.random()*shirts.length)];
+  const hr=hair[Math.floor(Math.random()*hair.length)];
+  const el=document.createElement('div');
+  el.className='walker '+kind+(item==='umb'?' has-umb':'');
+  el.setAttribute('aria-hidden','true');
+  const held=item==='bag'?bagSVG():item==='flowers'?flowerSVG():'';
+  el.innerHTML='<div class="fig"><span class="umb">'+umbrellaSVG()+'</span>'+(held?'<span class="item '+item+'">'+held+'</span>':'')+personSVG(skin,shirt,hr,kind)+'</div>';
+  box.appendChild(el);
+  const base=kind==='kid'?0.26:kind==='grandma'?0.075:0.14;
+  const w={
+    el,kind,item,
+    side:Math.random()<.5?-1:1,
+    lane:(Math.random()*3|0)-1,
+    speed:base*(.82+Math.random()*0.4),
+    state:'in', t:0, wait:0,
+    x:0,y:0,sc:1,op:1,face:1,prevX:null
+  };
+  if(scatter){
+    const roll=Math.random();
+    if(roll<.18){w.state='wait';w.t=1;w.wait=.4+Math.random()*3;w.op=0;w.sc=.3}
+    else if(roll<.5){w.state='out';w.t=Math.random()*.85;w.side=Math.random()<.5?-1:1}
+    else {w.state='in';w.t=Math.random()*.82}
+  }
+  return w;
+}
+function paintWalker(w){
+  w.el.style.left=w.x+'%';
+  w.el.style.top=w.y+'%';
+  w.el.style.transform='translate(-50%,-100%) scale('+((w.face||1)*(w.sc||1))+','+(w.sc||1)+')';
+  w.el.style.opacity=w.op;
+  w.el.style.zIndex=String(20+Math.round(w.y||0));
+  w.el.classList.toggle('idle',w.state==='wait'||w.op<0.12);
+}
+function advanceWalker(w,dt,L){
+  if(w.state==='wait'){
+    w.x=L.door.x;w.y=L.door.y;w.op=0;w.sc=.28;
+    w.wait-=dt;
+    if(w.wait<=0){
+      w.state='out';w.t=0;
+      w.side=Math.random()<.5?-1:1;
+      w.lane=(Math.random()*3|0)-1;
+    }
+    return;
+  }
+  w.t+=w.speed*dt;
+  const dir=w.state==='out'?'out':'in';
+  const pts=walkPath(L,w.side,w.lane,dir);
+  const p=polyAt(pts,Math.min(1,w.t));
+  if(w.prevX==null)w.prevX=p.x;
+  const dx=p.x-w.prevX;
+  if(Math.abs(dx)>.02)w.face=dx>=0?1:-1;
+  w.prevX=p.x;
+  w.x=p.x;w.y=p.y;
+  if(w.state==='in'){
+    const fade=Math.max(0,(w.t-.72)/.28);
+    w.sc=1-fade*.72;w.op=1-fade;
+    if(w.t>=1){w.state='wait';w.wait=1.2+Math.random()*3.5;w.op=0;w.sc=.28;w.prevX=null}
+  }else{
+    const grow=Math.max(0,Math.min(1,w.t/.28));
+    w.sc=.28+grow*.72;w.op=grow;
+    if(w.t>=1){w.state='in';w.t=0;w.op=1;w.sc=1;w.prevX=null;w.lane=(Math.random()*3|0)-1}
+  }
+}
+function spawnWalkers(){
+  const box=$('#walk');if(!box)return;
+  const n=walkWanted();
+  while(walkers.length>n){const w=walkers.pop();if(w.el)w.el.remove()}
+  while(walkers.length<n)walkers.push(makeWalker(box,true));
+}
+function tickWalkers(dt){
+  if(mini||document.hidden)return;
+  if(walkers.length!==walkWanted())spawnWalkers();
+  const L=walkLayout();if(!L)return;
+  if(walkReduce==null){
+    try{walkReduce=matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){walkReduce=false}
+  }
+  for(const w of walkers){
+    if(!walkReduce)advanceWalker(w,dt,L);
+    else if(!w.x&&!w.y){w.state='in';w.t=.4+.3*Math.random();advanceWalker(w,0,L)}
+    paintWalker(w);
+  }
+}
+
+function snowmanSVG(){
+  return `<svg viewBox="0 0 48 70" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="24" cy="54" r="14" fill="#f4f7fb"/>
+    <circle cx="24" cy="32" r="11" fill="#eef3f8"/>
+    <circle cx="24" cy="14" r="8" fill="#f7fafc"/>
+    <rect x="16" y="2" width="16" height="6" rx="1" fill="#2a2a2a"/>
+    <rect x="19" y="0" width="10" height="5" rx="1" fill="#1a1a1a"/>
+    <circle cx="21" cy="13" r="1.1" fill="#2a2a2a"/>
+    <circle cx="27" cy="13" r="1.1" fill="#2a2a2a"/>
+    <polygon points="24,15 32,17 24,19" fill="#e07a2a"/>
+    <circle cx="24" cy="32" r="1.3" fill="#2a2a2a"/>
+    <circle cx="24" cy="38" r="1.3" fill="#2a2a2a"/>
+    <circle cx="24" cy="52" r="1.5" fill="#2a2a2a"/>
+    <rect x="10" y="30" width="8" height="2.2" rx="1" fill="#6a3a1a"/>
+    <rect x="30" y="30" width="8" height="2.2" rx="1" fill="#6a3a1a"/>
+    <path d="M16 22 Q24 28 32 22" fill="none" stroke="#c44a4a" stroke-width="2"/>
+  </svg>`;
+}
+function catSVG(){
+  return `<svg viewBox="0 0 40 24" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="20" cy="16" rx="12" ry="6.5" fill="#c47a3a"/>
+    <circle cx="10" cy="12" r="6" fill="#c47a3a"/>
+    <polygon points="5,10 5,3 10,9" fill="#c47a3a"/>
+    <polygon points="15,9 15,3 10,10" fill="#c47a3a"/>
+    <polygon points="6,8 5.5,5 8,8" fill="#f3c7a3"/>
+    <polygon points="14,8 14.5,5 12,8" fill="#f3c7a3"/>
+    <circle cx="8" cy="12" r="1" fill="#2a2a2a"/>
+    <ellipse cx="4.5" cy="13.5" rx="1.6" ry="0.8" fill="#e8a090"/>
+    <path d="M32 16 Q40 2 36 16" fill="none" stroke="#c47a3a" stroke-width="2.2" stroke-linecap="round"/>
+    <rect x="14" y="20" width="2" height="4" rx="1" fill="#8a5a32"/>
+    <rect x="24" y="20" width="2" height="4" rx="1" fill="#8a5a32"/>
+  </svg>`;
+}
+function birdSVG(){
+  return `<svg viewBox="0 0 28 16" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="14" cy="10" rx="6" ry="3.4" fill="#b8b4ae"/>
+    <circle cx="8" cy="9" r="3.2" fill="#c8c4be"/>
+    <polygon points="4,9 0,10 4,11" fill="#e0a040"/>
+    <circle cx="7" cy="8.2" r=".7" fill="#2a2a2a"/>
+    <path class="wing" d="M14 10 Q18 2 22 10" fill="#9a968e"/>
+    <path d="M20 10 Q26 8 24 12" fill="#9a968e"/>
+  </svg>`;
+}
+function benchSVG(){
+  return `<svg viewBox="0 0 80 58" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6" y="36" width="68" height="6" rx="1.5" fill="#8a5a32"/>
+    <rect x="10" y="42" width="5" height="14" rx="1" fill="#6a3a1a"/>
+    <rect x="65" y="42" width="5" height="14" rx="1" fill="#6a3a1a"/>
+    <rect x="10" y="26" width="60" height="5" rx="1" fill="#8a5a32"/>
+    <rect x="12" y="18" width="56" height="4" rx="1" fill="#7a4a28"/>
+    <circle cx="40" cy="14" r="6" fill="#f0c8a8"/>
+    <path d="M34 12 Q40 4 46 12" fill="#d8d0c8"/>
+    <ellipse cx="40" cy="30" rx="10" ry="10" fill="#6a4a8a"/>
+    <path d="M32 28 L28 40 L36 38" stroke="#f0c8a8" stroke-width="2.2" fill="none"/>
+    <path d="M48 28 L52 40 L44 38" stroke="#f0c8a8" stroke-width="2.2" fill="none"/>
+    <circle cx="38" cy="13.5" r=".7" fill="#2a2a2a"/>
+    <circle cx="42.5" cy="13.5" r=".7" fill="#2a2a2a"/>
+    <path d="M38 16 Q40 17.5 42 16" fill="none" stroke="#c48a7a" stroke-width="1"/>
+    <circle cx="54" cy="40" r="4" fill="#c44a4a"/>
+    <path d="M50 38 Q46 32 44 36" fill="none" stroke="#c44a4a" stroke-width="1"/>
+  </svg>`;
+}
+function bellSVG(){
+  return `<svg viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+    <rect x="14" y="0" width="4" height="6" fill="#c9a24a"/>
+    <path d="M6 16 Q6 6 16 6 Q26 6 26 16 L28 28 Q16 34 4 28 Z" fill="#e6c15a" stroke="#b8862a" stroke-width="1"/>
+    <ellipse cx="16" cy="28" rx="12" ry="3.2" fill="#d4a84a"/>
+    <circle cx="16" cy="32" r="2.4" fill="#c9a24a"/>
+  </svg>`;
+}
+function moonSVG(){
+  return `<svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+    <defs><mask id="mc"><rect width="36" height="36" fill="#fff"/><circle cx="22" cy="12" r="11" fill="#000"/></mask></defs>
+    <circle cx="16" cy="18" r="12" fill="#ffe9a8" mask="url(#mc)"/>
+  </svg>`;
+}
+function zawhozSVG(){
+  return `<svg viewBox="0 0 40 70" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="8" width="3" height="58" fill="#8a5a32"/>
+    <rect x="16" y="8" width="3" height="58" fill="#8a5a32"/>
+    <rect x="2" y="16" width="17" height="2" fill="#a06a3a"/>
+    <rect x="2" y="28" width="17" height="2" fill="#a06a3a"/>
+    <rect x="2" y="40" width="17" height="2" fill="#a06a3a"/>
+    <rect x="2" y="52" width="17" height="2" fill="#a06a3a"/>
+    <circle cx="30" cy="18" r="5.5" fill="#e8b48a"/>
+    <rect x="25" y="13" width="10" height="3" rx="1" fill="#3a5a8a"/>
+    <rect x="26" y="11" width="8" height="3" fill="#3a5a8a"/>
+    <ellipse cx="30" cy="34" rx="6.5" ry="11" fill="#4a7a4a"/>
+    <rect x="24.5" y="44" width="4" height="16" rx="1.4" fill="#3d4a6b"/>
+    <rect x="31.5" y="44" width="4" height="16" rx="1.4" fill="#3d4a6b"/>
+    <rect x="22" y="30" width="7" height="5" rx="1" fill="#8a5a32"/>
+    <circle cx="28.5" cy="17.5" r=".8" fill="#2a2a2a"/>
+    <circle cx="32.2" cy="17.5" r=".8" fill="#2a2a2a"/>
+  </svg>`;
+}
+function keySVG(){
+  return `<svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="10" r="6" fill="none" stroke="#ffc94a" stroke-width="3"/>
+    <rect x="14" y="8.5" width="12" height="3" fill="#ffc94a"/>
+    <rect x="22" y="8.5" width="3" height="7" fill="#ffc94a"/>
+    <rect x="18" y="8.5" width="3" height="5" fill="#ffc94a"/>
+  </svg>`;
+}
+function bucketSVG(){
+  return `<svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+    <path d="M7 10 L9 24 Q14 27 19 24 L21 10 Z" fill="#4a8ac8" stroke="#2a5a8a" stroke-width="1"/>
+    <rect x="6" y="8" width="16" height="3" rx="1" fill="#3a6aaa"/>
+    <path d="M8 8 Q14 0 20 8" fill="none" stroke="#c9a24a" stroke-width="2"/>
+    <path d="M10 16 H18" stroke="#fff8" stroke-width="1.2"/>
+  </svg>`;
+}
+function umbrellaSVG(){
+  return `<svg viewBox="0 0 34 22" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2 14 Q17 0 32 14 Z" fill="#c44a4a"/>
+    <path d="M17 14 V22" stroke="#6a3a1a" stroke-width="1.6"/>
+    <path d="M2 14 Q9 10 17 14 Q25 10 32 14" fill="#a83a3a"/>
+  </svg>`;
+}
+let shownNight=null,rainT=null,zavT=null,eggT=null,rainEndT=null,bellAt=0;
+function syncNight(){
+  const n=isNight();
+  document.body.classList.toggle('night',n);
+  if(shownNight!==n){shownNight=n;fillStars(n?14:0)}
+}
+function fillStars(n){
+  const fx=$('#fx');if(!fx)return;
+  fx.querySelectorAll('.star').forEach(e=>e.remove());
+  for(let i=0;i<n;i++){
+    const e=document.createElement('i');e.className='star';
+    const sz=1.4+Math.random()*2.2;
+    e.style.cssText=`left:${4+Math.random()*92}%;top:${3+Math.random()*38}%;width:${sz}px;height:${sz}px;animation-delay:${-Math.random()*2}s`;
+    fx.appendChild(e);
+  }
+}
+function startRain(ms){
+  const fx=$('#fx');if(!fx)return;
+  if(rainEndT){clearTimeout(rainEndT);rainEndT=null}
+  document.body.classList.add('rain');
+  fx.querySelectorAll('.drop').forEach(e=>e.remove());
+  for(let i=0;i<20;i++){
+    const e=document.createElement('i');e.className='drop';
+    const h=10+Math.random()*12;
+    e.style.cssText=`left:${Math.random()*100}%;top:${-10-Math.random()*30}%;height:${h}px;animation-duration:${.55+Math.random()*.7}s;animation-delay:${-Math.random()*2}s`;
+    fx.appendChild(e);
+  }
+  rainEndT=setTimeout(()=>stopRain(true),ms||18000);
+}
+function stopRain(sched){
+  document.body.classList.remove('rain');
+  const fx=$('#fx');if(fx)fx.querySelectorAll('.drop').forEach(e=>e.remove());
+  if(rainEndT){clearTimeout(rainEndT);rainEndT=null}
+  if(sched)scheduleRain();
+}
+function scheduleRain(){
+  if(rainT)clearTimeout(rainT);
+  rainT=setTimeout(()=>startRain(),50000+Math.random()*90000);
+}
+function showZavhoz(ms){
+  const box=$('#bits');if(!box)return;
+  box.querySelectorAll('.zavh').forEach(e=>e.remove());
+  const el=document.createElement('button');
+  el.type='button';el.className='bit zavh';el.setAttribute('aria-label','Завхоз');
+  el.innerHTML=zawhozSVG();
+  let used=false;
+  el.onclick=e=>{
+    e.stopPropagation();
+    if(used)return;used=true;
+    const b=nice(Math.max(20,incomeEst()*12));
+    add(b,true);toast('🧰 Завхоз нашёл запасной инструмент: +'+fmt(b));snd('buy');vib(12);
+    el.classList.add('gone');
+  };
+  box.appendChild(el);
+  setTimeout(()=>{if(el.parentNode)el.remove();scheduleZavhoz()},ms||14000);
+}
+function scheduleZavhoz(){
+  if(zavT)clearTimeout(zavT);
+  zavT=setTimeout(()=>showZavhoz(),45000+Math.random()*60000);
+}
+function spawnEgg(forceId,spot){
+  const box=$('#bits');if(!box)return;
+  box.querySelectorAll('.egg').forEach(e=>e.remove());
+  const kinds=[{id:'key',svg:keySVG,txt:'🔑 Нашли потерянные ключи'},{id:'bucket',svg:bucketSVG,txt:'🪣 Ведро завхоза'}];
+  const kind=forceId?kinds.find(x=>x.id===forceId)||kinds[0]:kinds[Math.floor(Math.random()*kinds.length)];
+  const el=document.createElement('button');
+  el.type='button';el.className='bit egg egg-'+kind.id+' '+(spot||['tl','tr','bl','br'][Math.floor(Math.random()*4)]);
+  el.setAttribute('aria-label',kind.txt);
+  el.innerHTML=kind.svg();
+  let used=false;
+  el.onclick=e=>{
+    e.stopPropagation();
+    if(used)return;used=true;
+    const b=nice(Math.max(25,incomeEst()*18));
+    add(b,true);toast(kind.txt+': +'+fmt(b));snd('chime');vib(15);
+    el.remove();
+  };
+  box.appendChild(el);
+  setTimeout(()=>{if(el.parentNode)el.remove();scheduleEgg()},12000);
+}
+function scheduleEgg(){
+  if(eggT)clearTimeout(eggT);
+  eggT=setTimeout(()=>spawnEgg(),40000+Math.random()*70000);
+}
+function ringBell(){
+  const el=$('#bitBell');
+  if(el){el.classList.remove('ring');void el.offsetWidth;el.classList.add('ring');setTimeout(()=>el.classList.remove('ring'),900)}
+  snd('bell');vib(18);
+  const now=Date.now();
+  if(now-bellAt>45000){
+    bellAt=now;
+    const b=nice(Math.max(15,incomeEst()*8));
+    add(b,true);toast('🔔 Колокол: +'+fmt(b));
+  }
+}
+function mountBits(){
+  const box=$('#bits');if(!box)return;
+  box.innerHTML='<div class="bit cat" aria-hidden="true">'+catSVG()+'</div>'
+    +'<div class="bit bench" aria-hidden="true">'+benchSVG()+'</div>'
+    +'<button type="button" class="bit bell" id="bitBell" aria-label="Колокол">'+bellSVG()+'</button>'
+    +'<div class="bit moon" aria-hidden="true">'+moonSVG()+'</div>';
+  for(let i=0;i<3;i++){
+    const b=document.createElement('div');
+    b.className='bit bird';b.setAttribute('aria-hidden','true');
+    b.innerHTML=birdSVG();
+    b.style.top=(6+i*7)+'%';
+    b.style.animationDuration=(10+i*2.4)+'s';
+    b.style.animationDelay=(-i*3.5)+'s';
+    box.appendChild(b);
+  }
+  const bell=$('#bitBell');if(bell)bell.onclick=e=>{e.stopPropagation();ringBell()};
+  scheduleRain();scheduleZavhoz();scheduleEgg();
+}
+
+const TUTOR=[
+ {ic:'⛪',t:'Добро пожаловать!',d:'Вы — завхоз церкви. Нажимайте на церковь, чтобы делать добрые дела.',hl:'tut-hl'},
+ {ic:'🛠',t:'Улучшения',d:'За дела нанимайте волонтёров, ставьте стулья и зовите хор — церковь будет расти.',hl:'tut-hl2'},
+ {ic:'📅',t:'Каждый день — новое',d:'В «Заданиях» три поручения на день, а в «Играх» — короткие мини-игры.',hl:'tut-hl3'},
+ {ic:'🕊',t:'Готово!',d:'Загляните во вкладку «Приход», читайте стих дня и просто делайте добро. Слава Богу!',hl:''},
+];
+let tutI=0;
+function showTutor(){
+  tutI=0;renderTutor();$('#tutor').hidden=false;
+}
+function renderTutor(){
+  const s=TUTOR[tutI];
+  document.body.classList.remove('tut-hl','tut-hl2','tut-hl3');
+  if(s.hl)document.body.classList.add(s.hl);
+  $('#tstep').innerHTML='<span class="ic">'+s.ic+'</span><b>'+s.t+'</b>'+s.d+'<div class="dots">'+('●'.repeat(tutI+1))+('○'.repeat(TUTOR.length-tutI-1))+'</div>';
+  $('#tnext').textContent=tutI===TUTOR.length-1?'Начать!':'Далее';
+}
+function closeTutor(){
+  document.body.classList.remove('tut-hl','tut-hl2','tut-hl3');
+  $('#tutor').hidden=true;S.tut=1;save();setTimeout(bootModals,200);
+}
+function bootModals(){
+  showVerse();
+  showSeasonBonus();
+  if(!S.intro){S.intro=1;showStory(0,false)}
+}
+
+function verseOfDay(d){
+  d=d||new Date();
+  const start=new Date(d.getFullYear(),0,0);
+  const day=Math.max(0,Math.floor((d-start)/86400000));
+  return DAYV[day%DAYV.length];
+}
+function showVerse(force){
+  if(!force&&S.verseDay===dayKey())return false;
+  const vr=verseOfDay(),t=vr[0],r=vr[1];
+  const bonus=nice(Math.max(50,incomeEst()*45));
+  const give=S.verseDay!==dayKey();
+  modal('📖 <b>Стих дня</b><br><div class="story">«'+t+'»</div><span class="verse-ref">('+r+')</span>'+(give?'<br>Награда: <b>+'+fmt(bonus)+'</b> добрых дел':''),
+   [{t:'Аминь 🙏',f:()=>{if(give){add(bonus,true);S.verseDay=dayKey();S.st.verse=(S.st.verse||0)+1;toast('+'+fmt(bonus)+' за стих дня');save()}}}]);
+  return true;
+}
+function seasonKey(){
+  const s=season||detectSeason();if(!s)return '';
+  const n=new Date(),y=n.getFullYear(),m=n.getMonth();
+  return ((s==='xmas'&&m===0)?y-1:y)+'-'+s;
+}
+function showSeasonBonus(){
+  if(!season||S.seasonClaim===seasonKey())return false;
+  const bonus=nice(Math.max(80,incomeEst()*90));
+  const title=season==='xmas'?'🎄 С Рождеством!':'🐣 Светлой Пасхи!';
+  const d=season==='xmas'?'У церкви ёлка, гирлянды и снег. Примите праздничный дар.':'Церковь украшена к Пасхе. Примите праздничный дар.';
+  modal(title+'<br><p>'+d+'</p>Награда: <b>+'+fmt(bonus)+'</b> добрых дел',
+   [{t:'Слава Богу! 🙏',f:()=>{add(bonus,true);S.seasonClaim=seasonKey();toast('+'+fmt(bonus)+' к празднику');save()}}]);
+  return true;
+}
+
+const PW_GOALS=[
+ {ic:'🏠',n:'Ремонт крыши',d:'Собрать добрые дела на ремонт крыши'},
+ {ic:'🪑',n:'Новые стулья',d:'Чтобы в зале никто не стоял в проходе'},
+ {ic:'☕',n:'Чай для гостей',d:'Наполнить кухню чаем и печеньем'},
+ {ic:'💡',n:'Свет во дворе',d:'Починить фонари у входа'},
+ {ic:'🌿',n:'Цветник у крыльца',d:'Разбить клумбы у дверей церкви'},
+ {ic:'🎸',n:'Вечер для молодёжи',d:'Подготовить зал к тёплому вечеру'},
+ {ic:'🧺',n:'Помощь семьям',d:'Собрать наборы для семей прихода'},
+];
+function pwEnsure(){
+  const w=isoWeekKey(new Date());
+  if(!S.pw||S.pw.w!==w){
+    const n=parseInt(w.replace(/\D/g,''),10)||0;
+    const g=PW_GOALS[Math.abs(n)%PW_GOALS.length];
+    const need=nice(Math.max(2500,incomeEst()*2400));
+    S.pw={w,ic:g.ic,n:g.n,d:g.d,need,got:0,claimed:0};
+  }
+  return S.pw;
+}
+function pwAdd(n){if(!(n>0))return;pwEnsure();S.pw.got+=n}
+function pwClaim(){
+  const p=pwEnsure();if(p.claimed||p.got<p.need)return;
+  const r=nice(Math.max(120,incomeEst()*180));
+  p.claimed=1;add(r,true);toast('🕊 Цель недели выполнена! +'+fmt(r));vib([20,30,20]);snd('chime');save();renderP(true);
+}
+function parishHtml(){
+  const p=pwEnsure(),pct=Math.min(100,p.got/p.need*100);
+  const ready=p.got>=p.need&&!p.claimed;
+  return '<p class="apro">Цель прихода на эту неделю</p>'
+    +'<div class="it goal"><div class="ic">'+p.ic+'</div><div class="tx"><b>'+p.n+'</b><br>'+p.d+'</div></div>'
+    +'<div class="pwbar"><i style="width:'+pct+'%"></i></div>'
+    +'<p>Собрано: <b>'+fmt(p.got)+'</b> из <b>'+fmt(p.need)+'</b> дел</p>'
+    +(p.claimed?'<p>Недельная цель уже закрыта. Слава Богу!</p>':'<button id="pwBtn" class="big" '+(ready?'':'disabled')+'>'+(ready?'Забрать награду':'Ещё '+fmt(Math.max(0,p.need-p.got)))+'</button>')
+    +'<p class="parish-note">Живая таблица всех игроков появится позже — для неё нужен общий сервер. Пока это цель вашего прихода на неделю: добрые дела, которые вы делаете здесь, идут в общую копилку этой цели.</p>';
+}
+
+function makeShareCard(){
+  return new Promise((res,rej)=>{
+    const W=1080,H=1350,c=document.createElement('canvas');c.width=W;c.height=H;
+    const g=c.getContext('2d');
+    const grd=g.createLinearGradient(0,0,0,H);grd.addColorStop(0,'#4a3222');grd.addColorStop(1,'#1e140e');
+    g.fillStyle=grd;g.fillRect(0,0,W,H);
+    g.strokeStyle='#ffc94a';g.lineWidth=10;g.strokeRect(36,36,W-72,H-72);
+    g.fillStyle='#ffc94a';g.fillRect(80,70,W-160,8);g.fillRect(80,H-80,W-160,8);
+    g.fillStyle='#ffe27a';g.font='bold 64px system-ui,Segoe UI,sans-serif';g.textAlign='center';
+    g.fillText(TITLE,W/2,160);
+    const finish=()=>{
+      g.fillStyle='#fff';g.font='bold 52px system-ui,Segoe UI,sans-serif';
+      g.fillText(fmt(S.total)+' добрых дел',W/2,980);
+      g.fillStyle='#ffc94a';g.font='36px system-ui,Segoe UI,sans-serif';
+      g.fillText(LOC[curLoc()].n,W/2,1050);
+      g.fillStyle='#fff';g.font='30px system-ui,Segoe UI,sans-serif';
+      g.fillText('Достижений: '+achProg()+' · стадия '+churchStage(S),W/2,1110);
+      g.fillStyle='#ffe27a';g.font='26px system-ui,Segoe UI,sans-serif';
+      g.fillText(URL0.replace(/^https:\/\//,''),W/2,1220);
+      c.toBlob(b=>res({canvas:c,blob:b,url:c.toDataURL('image/png')}),'image/png');
+    };
+    const img=new Image();
+    img.onload=()=>{
+      g.save();g.beginPath();g.arc(W/2,550,340,0,Math.PI*2);g.closePath();g.clip();
+      g.drawImage(img,W/2-340,210,680,680);g.restore();
+      g.strokeStyle='#ffc94a';g.lineWidth=12;g.beginPath();g.arc(W/2,550,340,0,Math.PI*2);g.stroke();
+      finish();
+    };
+    img.onerror=finish;
+    img.src='img/church'+churchStage(S)+'.webp';
+  });
+}
+
 let ev=null; // {type,end,need,got}
 let boost=null; // {n,ic,end}
 const cnt=id=>S.u[id]||0;
@@ -166,7 +887,20 @@ function people(s){
   return p;
 }
 function churchStage(s){const p=people(s);if(p>=12000)return 10;if(p>=7000)return 9;if(p>=4000)return 8;if(p>=2000)return 7;if(p>=1000)return 6;if(p>=500)return 5;if(p>=200)return 4;if(p>=80)return 3;if(p>=30)return 2;return 1}
-function isNight(){const h=new Date().getHours();return h>=22||h<6}
+let nightForce=null;
+function isNight(){
+  if(nightForce!=null)return !!nightForce;
+  const q=(new URLSearchParams(location.search).get('time')||'').toLowerCase();
+  if(q==='night')return true;
+  if(q==='day')return false;
+  const h=new Date().getHours();return h>=22||h<6;
+}
+function setTime(mode){
+  if(mode==='night')nightForce=true;
+  else if(mode==='day')nightForce=false;
+  else nightForce=null;
+  syncNight();
+}
 function bBonus(b,lv){
   if(!lv)return '';
   if(b.tap)return ' · +'+(b.tap*lv)+' к нажатию';
@@ -182,17 +916,20 @@ const tapEl=$('#tap');
 let shownChurch=0;
 function renderChurch(){
   const st=churchStage(S);
-  if(st===shownChurch)return;
-  const img=tapEl.querySelector('img');
-  if(img)img.src='img/church'+st+'.webp';
-  if(shownChurch&&st>shownChurch){
-    tapEl.classList.remove('evolve');void tapEl.offsetWidth;
-    tapEl.classList.add('evolve');
-    setTimeout(()=>tapEl.classList.remove('evolve'),800);
-    toast('⛪ Церковь преобразилась!');
-    vib([30,40,30]);snd('chime');
+  if(st!==shownChurch){
+    const img=tapEl&&tapEl.querySelector('img');
+    if(img)img.src='img/church'+st+'.webp';
+    if(shownChurch&&st>shownChurch){
+      tapEl.classList.remove('evolve');void tapEl.offsetWidth;
+      tapEl.classList.add('evolve');
+      setTimeout(()=>tapEl.classList.remove('evolve'),800);
+      toast('⛪ Церковь преобразилась!');
+      vib([30,40,30]);snd('chime');
+      spawnWalkers();
+    }
+    shownChurch=st;
   }
-  shownChurch=st;
+  syncNight();
 }
 for(let n=1;n<=10;n++){const i=new Image();i.src='img/church'+n+'.webp'}
 BLD.forEach(b=>{const i=new Image();i.src='img/b_'+b.id+'.webp'});
@@ -212,34 +949,50 @@ function nextModal(){
 }
 // ---------- audio ----------
 let AC=null,master=null,musGain=null,musT=null,musStep=0;
+const HZ={C3:130.81,D3:146.83,E3:164.81,F3:174.61,G3:196,A3:220,B3:246.94,C4:261.63,D4:293.66,E4:329.63,F4:349.23,G4:392,A4:440,B4:493.88,C5:523.25,D5:587.33,E5:659.25,F5:698.46,G5:783.99};
+// Old 100th (PD) / Silent Night (PD) / simple Easter chorale (PD-style)
+const HYMN={
+  main:{beat:.62,span:16,mel:[['G4',0,1],['E4',1,1],['F4',2,1],['G4',3,1],['G4',4,1],['A4',5,1],['B4',6,1],['C5',7,2],['C5',9,1],['B4',10,1],['A4',11,1],['G4',12,1],['A4',13,1],['G4',14,1],['F4',15,1],['E4',16,2]],ch:[['C4','E4','G4'],['C4','E4','G4'],['F4','A4','C5'],['C4','E4','G4']]},
+  xmas:{beat:.7,span:16,mel:[['G4',0,1.5],['A4',1.5,.5],['G4',2,1],['E4',3,3],['G4',6,1.5],['A4',7.5,.5],['G4',8,1],['E4',9,3],['D5',12,2],['D5',14,2],['B4',16,3]],ch:[['C4','E4','G4'],['C4','F4','A4'],['G3','D4','G4'],['C4','E4','G4']]},
+  easter:{beat:.5,span:12,mel:[['C4',0,1],['E4',1,1],['G4',2,1],['C5',3,2],['B4',5,1],['C5',6,1],['D5',7,2],['E5',9,1],['C5',10,1],['G4',11,1],['E4',12,2],['C4',14,2]],ch:[['C4','E4','G4'],['G3','B3','D4'],['C4','E4','G4'],['F3','A3','C4']]}
+};
 function ac(){
-  if(!AC){const C=window.AudioContext||window.webkitAudioContext;if(!C)return null;AC=new C();master=AC.createGain();master.gain.value=.9;master.connect(AC.destination);musGain=AC.createGain();musGain.gain.value=.05;const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1400;musGain.connect(lp);lp.connect(master)}
+  if(!AC){const C=window.AudioContext||window.webkitAudioContext;if(!C)return null;AC=new C();master=AC.createGain();master.gain.value=.9;master.connect(AC.destination);musGain=AC.createGain();musGain.gain.value=S.set.mvol??.45;const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1600;musGain.connect(lp);lp.connect(master)}
   if(AC.state==='suspended')AC.resume();
+  if(musGain)musGain.gain.value=S.set.mvol??.45;
   return AC;
 }
-function tone(f,t0,dur,vol,type,dest){const a=AC,o=a.createOscillator(),g=a.createGain();o.type=type||'sine';o.frequency.value=f;g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(vol,t0+Math.min(.02,dur/4));g.gain.exponentialRampToValueAtTime(.0001,t0+dur);o.connect(g);g.connect(dest||master);o.start(t0);o.stop(t0+dur+.05)}
+function tone(f,t0,dur,vol,type,dest){if(!AC||!f)return;const o=AC.createOscillator(),g=AC.createGain();o.type=type||'sine';o.frequency.value=f;g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(vol,t0+Math.min(.03,dur/5));g.gain.exponentialRampToValueAtTime(.0001,t0+dur);o.connect(g);g.connect(dest||master);o.start(t0);o.stop(t0+dur+.05)}
 function snd(k){
   if(!S.set.snd||!AC||AC.state!=='running')return;
-  const t=AC.currentTime;
-  if(k==='tap')tone(620+Math.random()*120,t,.09,.12,'triangle');
-  else if(k==='buy'){tone(523,t,.12,.12,'triangle');tone(784,t+.07,.18,.12,'triangle')}
-  else if(k==='click')tone(440,t,.06,.08,'sine');
-  else if(k==='chime'){[523,659,784,1047].forEach((f,i)=>tone(f,t+i*.09,.5,.1,'sine'))}
-  else if(k==='bad'){tone(180,t,.25,.15,'square')}
+  const t=AC.currentTime,v=S.set.svol??.8;
+  if(k==='tap'){tone(740+Math.random()*80,t,.08,.1*v,'sine');tone(980,t,.05,.045*v,'triangle')}
+  else if(k==='buy'){[523,659,784].forEach((f,i)=>tone(f,t+i*.05,.18,.1*v,'triangle'))}
+  else if(k==='click')tone(520,t,.05,.07*v,'sine');
+  else if(k==='chime'){[523,659,784,1046,1318].forEach((f,i)=>tone(f,t+i*.1,.55,.08*v,'sine'))}
+  else if(k==='bell'){[392,523,659,784].forEach((f,i)=>tone(f,t+i*.03,.7,.11*v,'sine'));tone(196,t,.9,.07*v,'triangle')}
+  else if(k==='bad'){tone(196,t,.22,.11*v,'triangle');tone(165,t+.08,.28,.08*v,'sine')}
 }
-const CH=[[261.6,329.6,392],[196,246.9,293.7],[220,261.6,329.6],[174.6,220,261.6]]; // C G Am F
 function musTick(){
   if(!S.set.mus||!AC||AC.state!=='running'||document.hidden)return;
-  const t=AC.currentTime+.05,c=CH[musStep%4];
-  c.forEach(f=>{tone(f,t,3.6,.5,'sine',musGain);tone(f/2,t,3.6,.25,'triangle',musGain)});
-  [0,1,2,1].forEach((k,i)=>{if(Math.random()<.7)tone(c[k]*2,t+i*.9,.9,.18,'sine',musGain)});
+  const h=HYMN[season==='xmas'?'xmas':season==='easter'?'easter':'main'];
+  const beat=h.beat,t0=AC.currentTime+.04,vol=(S.set.mvol??.45);
+  if(musGain)musGain.gain.value=vol;
+  const ch=h.ch[musStep%h.ch.length];
+  ch.forEach(n=>{const f=HZ[n];if(!f)return;tone(f,t0,beat*4,.18,'sine',musGain);tone(f/2,t0,beat*4,.1,'triangle',musGain)});
+  h.mel.forEach(m=>{
+    const f=HZ[m[0]];if(!f)return;
+    const start=t0+m[1]*beat,dur=m[2]*beat*.95;
+    tone(f,start,dur,.22,'sine',musGain);
+    tone(f*2,start,dur*.8,.07,'triangle',musGain);
+  });
   musStep++;
 }
-function musicSync(){clearInterval(musT);musT=null;if(S.set.mus&&AC){musTick();musT=setInterval(musTick,3600)}}
+function musicSync(){clearInterval(musT);musT=null;if(S.set.mus&&AC){const h=HYMN[season==='xmas'?'xmas':season==='easter'?'easter':'main'];musTick();musT=setInterval(musTick,Math.round(h.beat*(h.span+2)*1000))}}
 document.addEventListener('pointerdown',()=>{const first=!AC;ac();if(first)setTimeout(musicSync,50)},true);
 function vib(ms){if(!S.set.vib)return;try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
 function save(){S.t=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
-function add(n,noQ){S.d+=n;S.total+=n;S.run+=n;if(!noQ)qProg('earn',n)}
+function add(n,noQ){S.d+=n;S.total+=n;S.run+=n;if(!noQ)qProg('earn',n);if(n>0)pwAdd(n)}
 // ---------- tap ----------
 function onTap(x,y){
   if(ev&&(ev.type==='fuse'||ev.type==='mic')){ev.got++;float(x,y,ev.type==='fuse'?'⚡':'🎤');vib(8);snd('click');if(ev.got>=ev.need)fixEvent();renderEvent();return}
@@ -326,12 +1079,23 @@ function renderLoc(){
 }
 // ---------- share ----------
 async function share(){
-  const text='Я сделал '+fmt(S.total)+' добрых дел в игре «Завхоз Слова жизни»! Попробуй и ты:';
+  const text='Я сделал '+fmt(S.total)+' добрых дел в игре «'+TITLE+'»! Попробуй и ты:';
   S.shared=1;save();
-  try{if(navigator.share){await navigator.share({title:'Завхоз Слова жизни',text,url:URL0});return}}catch(e){if(e&&e.name==='AbortError')return}
+  let card=null;try{card=await makeShareCard()}catch(e){}
+  try{
+    if(navigator.share){
+      const opts={title:TITLE,text,url:URL0};
+      if(card&&card.blob){
+        const file=new File([card.blob],'zavhoz-card.png',{type:'image/png'});
+        if(!navigator.canShare||navigator.canShare({files:[file]}))opts.files=[file];
+      }
+      await navigator.share(opts);return;
+    }
+  }catch(e){if(e&&e.name==='AbortError')return}
+  if(card&&card.url){const a=document.createElement('a');a.href=card.url;a.download='zavhoz-card.png';document.body.appendChild(a);a.click();a.remove();toast('🖼 Карточка сохранена — отправьте её друзьям!')}
   const full=text+' '+URL0;
-  try{await navigator.clipboard.writeText(full);toast('📋 Ссылка скопирована — отправьте друзьям!');return}catch(e){}
-  try{const ta=document.createElement('textarea');ta.value=full;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('📋 Ссылка скопирована — отправьте друзьям!')}catch(e){toast(full)}
+  try{await navigator.clipboard.writeText(full);if(!card)toast('📋 Ссылка скопирована — отправьте друзьям!');return}catch(e){}
+  try{const ta=document.createElement('textarea');ta.value=full;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();if(!card)toast('📋 Ссылка скопирована — отправьте друзьям!')}catch(e){toast(full)}
 }
 // ---------- prestige ----------
 function askPrestige(){
@@ -833,13 +1597,13 @@ function grannyStep(lane,byUser){
 // ---------- panels ----------
 let panel=null;
 function achProg(){return ACH.filter(a=>S.ach[a.id]).length+'/'+ACH.length}
-function setTitle(p){$('#ptitle').textContent={shop:'🛠 Улучшения',bld:'🏛 Здания',quest:'📅 Задания на сегодня',mini:'🎮 Мини-игры',ach:'🏆 Достижения · '+achProg(),info:'ℹ️ Об игре'}[p]}
+function setTitle(p){$('#ptitle').textContent={shop:'🛠 Улучшения',bld:'🏛 Здания',quest:'📅 Задания на сегодня',mini:'🎮 Мини-игры',parish:'🕊 Приход',ach:'🏆 Достижения · '+achProg(),info:'ℹ️ Об игре'}[p]}
 function openP(p){panel=p;$('#panel').hidden=false;setTitle(p);renderP(true);document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.p===p))}
 $('#pclose').onclick=()=>{panel=null;$('#panel').hidden=true;document.querySelectorAll('#tabs button').forEach(b=>b.classList.remove('on'))};
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{snd('click');panel===b.dataset.p?$('#pclose').onclick():openP(b.dataset.p)});
 function untilMidnight(){const n=new Date(),m=new Date(n);m.setHours(24,0,0,0);return (m-n)/1000}
 function statsHtml(){
-  return `Время в игре: <b>${fmtT(S.st.play)}</b><br>Всего нажатий: <b>${fmt(S.taps)}</b><br>Лучший доход: <b>${fmt(S.st.best)}</b> дел/сек<br>Добрых дел за всё время: <b>${fmt(S.total)}</b><br>В этом приходе: <b>${fmt(S.run)}</b><br>Новых приходов: <b>${S.st.pr}</b> · благословений: <b>${S.bl}</b><br>Поймано праздников: <b>${S.st.ev}</b><br>Выполнено заданий: <b>${S.st.q}</b><br>Сыграно мини-игр: <b>${mgPlayed()}</b><br>Достижений: <b>${achProg()}</b>`;
+  return `Время в игре: <b>${fmtT(S.st.play)}</b><br>Всего нажатий: <b>${fmt(S.taps)}</b><br>Лучший доход: <b>${fmt(S.st.best)}</b> дел/сек<br>Добрых дел за всё время: <b>${fmt(S.total)}</b><br>В этом приходе: <b>${fmt(S.run)}</b><br>Новых приходов: <b>${S.st.pr}</b> · благословений: <b>${S.bl}</b><br>Поймано праздников: <b>${S.st.ev}</b><br>Выполнено заданий: <b>${S.st.q}</b><br>Сыграно мини-игр: <b>${mgPlayed()}</b><br>Стихов дня: <b>${S.st.verse||0}</b><br>Достижений: <b>${achProg()}</b>`;
 }
 function prestHtml(){
   const g=blessGain();
@@ -890,6 +1654,13 @@ function renderP(full){
         if(bt){bt.disabled=!!left;bt.textContent=left?'Ждём':'Играть'}
       });
     }
+  }else if(panel==='parish'){
+    if(full){b.innerHTML=parishHtml();const pb=$('#pwBtn');if(pb)pb.onclick=pwClaim}
+    else{
+      const p=pwEnsure(),bar=b.querySelector('.pwbar i'),btn=$('#pwBtn');
+      if(bar)bar.style.width=Math.min(100,p.got/p.need*100)+'%';
+      if(btn&&!p.claimed){btn.disabled=p.got<p.need;btn.textContent=p.got>=p.need?'Забрать награду':'Ещё '+fmt(Math.max(0,p.need-p.got))}
+    }
   }else if(panel==='ach'){
     if(full)b.innerHTML=ACH.map(a=>`<div class="it ach ${S.ach[a.id]?'ok':''}"><div class="ic">${S.ach[a.id]?'🏆':'🔒'}</div><div class="tx"><b>${a.n}</b><br>${a.d}</div></div>`).join('');
     setTitle('ach');
@@ -898,13 +1669,19 @@ function renderP(full){
       const tg=(k,n)=>`<button class="tg ${S.set[k]?'on':''}" data-k="${k}">${n}: ${S.set[k]?'вкл':'выкл'}</button>`;
       b.innerHTML=`<button id="shareBtn" class="big">📤 Поделиться игрой</button>
 <div class="it col"><div class="tx"><b>🙏 Новый приход</b><br><span id="prest">${prestHtml()}</span></div><button id="prBtn" class="warn">Начать новый приход</button></div>
-<div class="it col"><div class="tx"><b>⚙️ Настройки</b></div><div class="tgs">${tg('snd','🔊 Звук')}${tg('mus','🎵 Музыка')}${tg('vib','📳 Вибрация')}</div></div>
+<div class="it col"><div class="tx"><b>⚙️ Настройки</b></div><div class="tgs">${tg('snd','🔊 Звук')}${tg('mus','🎵 Музыка')}${tg('vib','📳 Вибрация')}</div>
+<div class="vol">🔊 <input id="svol" type="range" min="0" max="100" value="${Math.round((S.set.svol??.8)*100)}" aria-label="Громкость звуков"></div>
+<div class="vol">🎵 <input id="mvol" type="range" min="0" max="100" value="${Math.round((S.set.mvol??.45)*100)}" aria-label="Громкость музыки"></div></div>
 <div class="it"><div class="tx"><b>📊 Статистика</b><br><span id="statsBox">${statsHtml()}</span></div></div>
 <div class="it col"><div class="tx"><b>📖 Истории завхоза</b> · ${Math.min(S.loc+1,LOC.length)}/${LOC.length}</div><div class="stl">${LOC.map((l,i)=>i<=S.loc?`<button class="st" data-i="${i}">${i+1}. ${l.n}</button>`:`<button class="st" disabled>${i+1}. 🔒 ???</button>`).join('')}</div></div>
-<div class="it"><div class="tx">Вы — завхоз церкви «Слово жизни» на Павла Корчагина, 2А. Нажимайте на церковь, делайте добрые дела, нанимайте волонтёров и запускайте молодёжку «4.0». Покупайте здания для богослужений и улучшайте их: от молитвенного дома до летнего лагеря.<br><br>В разделе «Мини-игры» — три испытания по три уровня: уборка в зале, поиск микрофона и помощь бабушке. Каждую игру можно проходить раз в 3 часа. За три звезды сложность растёт, а награда становится больше.<br><br>Каждый день — 3 новых задания с наградой. Ловите праздничные значки на экране: они дают ×7 ко всем делам на 30 секунд. После ${fmt(PR_RUN)} дел можно начать «Новый приход» и получить благословения навсегда.<br><br>Игра сохраняется сама. Пока вас нет, волонтёры трудятся (до 8 часов).<br><br>${VERSES[3]}</div></div>
+<div class="it"><div class="tx">Вы — завхоз церкви. Нажимайте на церковь, делайте добрые дела, нанимайте волонтёров и запускайте молодёжку «4.0». К Рождеству и Пасхе церковь наряжается сама, а каждый день вас встречает стих из Писания. Покупайте здания для богослужений и улучшайте их: от молитвенного дома до летнего лагеря.<br><br>В разделе «Мини-игры» — три испытания по три уровня: уборка в зале, поиск микрофона и помощь бабушке. Каждую игру можно проходить раз в 3 часа. За три звезды сложность растёт, а награда становится больше.<br><br>Каждый день — 3 новых задания с наградой. Ловите праздничные значки на экране: они дают ×7 ко всем делам на 30 секунд. После ${fmt(PR_RUN)} дел можно начать «Новый приход» и получить благословения навсегда.<br><br>Игра сохраняется сама. Пока вас нет, волонтёры трудятся (до 8 часов).<br><br>${VERSES[3]}</div></div>
 <button id="reset" style="background:#7a1f1f;width:100%;margin-top:6px">Стереть всё и начать с нуля</button>`;
       $('#shareBtn').onclick=share;
       $('#prBtn').onclick=askPrestige;
+      const sv=$('#svol'),mv=$('#mvol');
+      if(sv)sv.oninput=()=>{S.set.svol=sv.value/100;S.set.snd=S.set.svol>0?1:0;save()};
+      if(mv)mv.oninput=()=>{S.set.mvol=mv.value/100;if(musGain)musGain.gain.value=S.set.mvol;S.set.mus=S.set.mvol>0?1:0;if(AC)musicSync();save()};
+
       b.querySelectorAll('.tg').forEach(x=>x.onclick=()=>{const k=x.dataset.k;S.set[k]=S.set[k]?0:1;if(k==='mus')musicSync();if(k==='vib'&&S.set.vib)vib(30);save();renderP(true)});
       b.querySelectorAll('.st[data-i]').forEach(x=>x.onclick=()=>showStory(+x.dataset.i,false));
       $('#reset').onclick=()=>{if(confirm('Стереть весь прогресс, благословения и достижения?')){localStorage.removeItem(KEY);location.reload()}};
@@ -944,7 +1721,7 @@ function claimOff(n){add(n,true);S.offPend=0;S.offN=(S.offN||0)+1;toast('+'+fmt(
   const dt=Math.min(8*3600,(Date.now()-(S.t||Date.now()))/1000);
   let g=Math.floor(psBase()*dt*offRate());if(dt<=30)g=0;
   g+=S.offPend||0;
-  if(g>0){S.offPend=g;setTimeout(()=>offlineModal(g),300)}
+  if(g>0){S.offPend=g;setTimeout(()=>offlineModal(g),1400)}
 })();
 // ---------- loop ----------
 qCheckDay();
@@ -959,6 +1736,7 @@ function frame(now){
     if(badge&&Date.now()>badge.end){badge.el.classList.add('gone');const e=badge.el;setTimeout(()=>e.remove(),400);badge=null}
     if(!badge&&!mOpen&&Date.now()>badgeAt){spawnBadge();badgeAt=Date.now()+badgeWait()}
   }
+  if(!mini)tickWalkers(dt);
   acc+=dt;
   $('#deeds').textContent=fmt(S.d);
   if(acc>.25){acc=0;const p=ps();if(p>S.st.best)S.st.best=p;
@@ -968,11 +1746,15 @@ function frame(now){
     renderLoc();renderChurch();renderBoost();if(panel)renderP();if(ev)renderEvent();checkAch()}
   requestAnimationFrame(frame);
 }
-if(!S.intro){S.intro=1;setTimeout(()=>showStory(0,false),400)}
-renderChurch();
+applySeason();
+if($('#tskip'))$('#tskip').onclick=()=>{snd('click');closeTutor()};
+if($('#tnext'))$('#tnext').onclick=()=>{snd('click');if(tutI<TUTOR.length-1){tutI++;renderTutor()}else closeTutor()};
+renderChurch();spawnWalkers();mountBits();
+if(!S.tut)setTimeout(showTutor,350);
+else setTimeout(bootModals,400);
 requestAnimationFrame(frame);
 setInterval(save,5000);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){save();if(AC)AC.suspend()}else if(AC&&(S.set.mus||S.set.snd))AC.resume()});
 window.addEventListener('pagehide',save);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-window.__game={S,startEvent,openP,spawnBadge,offlineModal,showStory,askPrestige,startMini,closeMini,get ev(){return ev},get badge(){return badge},get mini(){return mini}};
+window.__game={S,TITLE,startEvent,openP,spawnBadge,offlineModal,showStory,askPrestige,startMini,closeMini,showTutor,showVerse,showSeasonBonus,applySeason,makeShareCard,pwEnsure,setTime,startRain,stopRain,showZavhoz,spawnEgg,ringBell,spawnWalkers,tickWalkers,setWalkN:n=>{walkForceN=n==null?null:n;spawnWalkers()},getWalkers:()=>walkers.map(w=>({x:w.x,y:w.y,state:w.state,t:w.t,kind:w.kind,item:w.item,op:w.op,side:w.side})),get ev(){return ev},get badge(){return badge},get mini(){return mini},get season(){return season}};
