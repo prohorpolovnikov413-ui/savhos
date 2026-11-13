@@ -47,6 +47,9 @@ const ACH=[
  {id:'st3',n:'Свет в окнах',d:'Дойти до 3-й стадии церкви',f:s=>churchStage(s)>=3},
  {id:'st4',n:'Дом наполняется',d:'Дойти до 4-й стадии церкви',f:s=>churchStage(s)>=4},
  {id:'st5',n:'Храм сияет',d:'Дойти до 5-й стадии церкви',f:s=>churchStage(s)>=5},
+ {id:'st6',n:'Двор полон гостей',d:'Дойти до 6-й стадии церкви',f:s=>churchStage(s)>=6},
+ {id:'st8',n:'Парковка и площадка',d:'Дойти до 8-й стадии церкви',f:s=>churchStage(s)>=8},
+ {id:'st10',n:'Салют над храмом',d:'Дойти до 10-й стадии церкви',f:s=>churchStage(s)>=10},
  {id:'tape',n:'Изолентой можно всё',d:'Купить 10 изолент',f:s=>(s.u.tape||0)>=10},
  {id:'vol10',n:'Команда мечты',d:'10 волонтёров',f:s=>(s.u.vol||0)>=10},
  {id:'youth',n:'Молодёжь горит',d:'Открыть «4.0»',f:s=>(s.u.youth||0)>=1},
@@ -95,7 +98,7 @@ function people(s){
   if(sch&&fam)p=Math.floor(p*(1+fam*sch));
   return p;
 }
-function churchStage(s){const p=people(s);if(p>=500)return 5;if(p>=200)return 4;if(p>=80)return 3;if(p>=20)return 2;return 1}
+function churchStage(s){const p=people(s);if(p>=12000)return 10;if(p>=7000)return 9;if(p>=4000)return 8;if(p>=2000)return 7;if(p>=1000)return 6;if(p>=500)return 5;if(p>=200)return 4;if(p>=80)return 3;if(p>=30)return 2;return 1}
 function isNight(){const h=new Date().getHours();return h>=22||h<6}
 function bBonus(b,lv){
   if(!lv)return '';
@@ -123,7 +126,7 @@ function renderChurch(){
   }
   shownChurch=st;
 }
-[1,2,3,4,5].forEach(n=>{const i=new Image();i.src='img/church'+n+'.webp'});
+for(let n=1;n<=10;n++){const i=new Image();i.src='img/church'+n+'.webp'}
 BLD.forEach(b=>{const i=new Image();i.src='img/b_'+b.id+'.webp'});
 const fmt=n=>{n=Math.floor(n);if(n<1e4)return n.toLocaleString('ru-RU');const z=[[1e12,' трлн'],[1e9,' млрд'],[1e6,' млн'],[1e3,' тыс']];for(const[v,s]of z)if(n>=v)return(n/v).toFixed(n/v<100?1:0).replace('.',',')+s;};
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>e.classList.remove('on'),2600)}
