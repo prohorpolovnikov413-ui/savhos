@@ -18,8 +18,9 @@
 <div id="bg"></div><div id="shade"></div>
 <header id="top">
   <div id="score"><span id="deeds">0</span><small>добрых дел</small></div>
-  <div id="stats"><span>⚡ <b id="dps">0</b>/сек</span><span>👆 <b id="dpt">1</b></span><span>👥 <b id="people">3</b></span></div>
+  <div id="stats"><span>⚡ <b id="dps">0</b>/сек</span><span>👆 <b id="dpt">1</b></span><span>👥 <b id="people">3</b></span><span id="blessS" hidden>🙏 <b id="bless">0</b></span></div>
   <div id="loc"><span id="locName">Кабинет завхоза</span><div id="locBar"><i></i></div><small id="locNext"></small></div>
+  <div id="boost" hidden></div>
 </header>
 <main id="play">
   <div id="event" hidden></div>
@@ -27,17 +28,18 @@
   <div id="hint">Нажимай на церковь — делай добрые дела!</div>
 </main>
 <nav id="tabs">
-  <button data-p="shop">🛠 Улучшения</button>
-  <button data-p="bld">🏛 Здания</button>
-  <button data-p="ach">🏆 Награды</button>
-  <button data-p="info">ℹ️ Об игре</button>
+  <button data-p="shop"><i>🛠</i>Улучшения</button>
+  <button data-p="bld"><i>🏛</i>Здания</button>
+  <button data-p="quest"><i>📅</i>Задания<em id="qdot" hidden></em></button>
+  <button data-p="ach"><i>🏆</i>Награды</button>
+  <button data-p="info"><i>ℹ️</i>Об игре</button>
 </nav>
 <section id="panel" hidden>
   <div class="ph"><b id="ptitle"></b><button id="pclose" aria-label="Закрыть">✕</button></div>
   <div id="pbody"></div>
 </section>
 <div id="toast"></div>
-<div id="modal" hidden><div class="mbox"><div id="mtext"></div><button id="mok">Слава Богу! 🙏</button></div></div>
+<div id="modal" hidden><div class="mbox"><div id="mtext"></div><div id="mbtns"></div></div></div>
 <script src="game.js"></script>
 </body>
 </html>
