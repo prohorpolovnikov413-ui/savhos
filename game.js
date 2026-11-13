@@ -112,7 +112,7 @@ const STORIES=[
  'Тысячи людей поют вместе, и даже скрипучая половица звучит в тон. Завхоз смотрит на зал и понимает: каждое маленькое доброе дело было не зря. Слава Богу!',
 ];
 const HOLI=[['⛪','Воскресное служение'],['🕊','Пасха'],['⭐','Рождество'],['🔥','Молодёжный вечер'],['🌿','Троица'],['🎶','Вечер хвалы'],['💧','Крещение'],['🍎','Праздник урожая']];
-const URL0='https://prohorpolovnikov413-ui.github.io/savhos/';
+const URL0='https://prohorpolovnikov413-ui.github.io/tap-church/';
 const KEY='zavhoz_sz_v1';
 let S={d:0,total:0,taps:0,u:{},ach:{},fix:0,mic:0,t:Date.now(),loc:0};
 let fresh=true;
