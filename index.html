@@ -43,6 +43,7 @@
   <button data-p="shop"><i>🛠</i>Улучшения</button>
   <button data-p="bld"><i>🏛</i>Здания</button>
   <button data-p="quest"><i>📅</i>Задания<em id="qdot" hidden></em></button>
+  <button data-p="mini"><i>🎮</i>Игры<em id="mgdot" hidden></em></button>
   <button data-p="ach"><i>🏆</i>Награды</button>
   <button data-p="info"><i>ℹ️</i>Об игре</button>
 </nav>
@@ -50,6 +51,13 @@
   <div class="ph"><b id="ptitle"></b><button id="pclose" aria-label="Закрыть">✕</button></div>
   <div id="pbody"></div>
 </section>
+<div id="mini" hidden>
+  <div id="mh"><b id="mtitle"></b><span id="mtimer"></span><button id="mclose" aria-label="Закрыть">✕</button></div>
+  <div id="mhint"></div>
+  <div id="mhud" hidden></div>
+  <div id="mstage"></div>
+  <div id="mstatus"></div>
+</div>
 <div id="toast"></div>
 <div id="modal" hidden><div class="mbox"><div id="mtext"></div><div id="mbtns"></div></div></div>
 <script src="game.js"></script>
