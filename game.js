@@ -150,6 +150,17 @@ function refCode(){return ensurePid().replace(/-/g,'').slice(0,12)}
 function inviteUrl(){return URL0.replace(/\/?$/,'/')+'?ref='+encodeURIComponent(refCode())}
 const refMul=()=>1+Math.min(REF_CAP,REF_PCT*(S.refInvited||0))/100;
 function friendsWord(n){const a=n%10,b=n%100;return a===1&&b!==11?'друг':a>=2&&a<=4&&(b<10||b>=20)?'друга':'друзей'}
+function isQuotaErr(e){
+  const err=e&&e.body&&e.body.error;
+  return err==='quota'||e.status===503;
+}
+function netQuiet(){return Date.now()<((net.quietUntil)||0)}
+function markQuota(e){
+  if(!isQuotaErr(e))return false;
+  const retry=(e.body&&e.body.retry)||10*60000;
+  net.quietUntil=Date.now()+Math.max(60000,retry);
+  return true;
+}
 async function api(path,opt){
   const ctl=new AbortController();
   const tmr=setTimeout(()=>ctl.abort(),8000);
@@ -186,21 +197,30 @@ function renderLive(){
   el.setAttribute('aria-label','Сейчас играют: '+o+'. Всего игроков: '+tot+'. Открыть таблицу мест');
 }
 async function netPing(){
+  if(netQuiet())return;
   try{
     const j=await api('/ping',{method:'POST',body:JSON.stringify({playerId:ensurePid(),refCode:refCode()})});
     net.lastPing=Date.now();applyNet(j);
-  }catch(e){net.ok=false;renderLive()}
+  }catch(e){if(!markQuota(e))net.ok=false;renderLive()}
 }
 async function netScore(force){
+  if(netQuiet())return;
   const now=Date.now();
-  if(!force&&net.lastSend&&now-net.lastSend<120000)return;
+  const score=Math.floor(S.total||0);
+  if(!force&&net.lastSend&&now-net.lastSend<300000)return;
+  if(net.lastScore!=null&&score<=net.lastScore&&!force)return;
+  if(force&&net.lastScore!=null&&score<=net.lastScore&&net.lastSend&&now-net.lastSend<300000)return;
   try{
-    const j=await api('/score',{method:'POST',body:JSON.stringify({playerId:ensurePid(),nick:ensureNick(),score:Math.floor(S.total||0),refCode:refCode()})});
-    net.lastSend=now;applyNet(j);
+    const j=await api('/score',{method:'POST',body:JSON.stringify({playerId:ensurePid(),nick:ensureNick(),score,refCode:refCode()})});
+    net.lastSend=now;
+    if(j&&typeof j.score==='number')net.lastScore=j.score;
+    else net.lastScore=score;
+    applyNet(j);
     if(panel==='board')renderP(true,{skipFetch:true});
     return j;
   }catch(e){
-    if(e.status!==429)net.ok=false;
+    markQuota(e);
+    if(e.status!==429&&!isQuotaErr(e))net.ok=false;
     renderLive();
     return e.body||null;
   }
@@ -229,8 +249,10 @@ async function applyIncomingRef(retries){
       save();
       return;
     }catch(e){
+      markQuota(e);
       const err=e&&e.body&&e.body.error;
       if(err==='exists'||err==='self'||(e&&e.body&&e.body.already)){S.refDone=1;S.pendingRef='';save();return}
+      if(isQuotaErr(e))return;
       if(i<tries-1)await new Promise(r=>setTimeout(r,400));
     }
   }
@@ -253,15 +275,16 @@ async function netMeAndClaim(){
         snd('chime');save();renderInvite();
       }
     }
-  }catch(e){}
+  }catch(e){markQuota(e)}
 }
 function startNet(){
   ensurePid();
   applyIncomingRef(5).finally(()=>{netPing();setTimeout(()=>netScore(true),1200);netMeAndClaim()});
   setInterval(netPing,60000);
-  setInterval(()=>netScore(false),120000);
+  setInterval(()=>netScore(false),300000);
   setInterval(netMeAndClaim,180000);
   document.addEventListener('visibilitychange',()=>{if(document.hidden){netScore(true);save()}else{applyIncomingRef(3).finally(()=>{netPing();netMeAndClaim()})}});
+  setTimeout(()=>syncPush(false),4000);
 }
 function boardHtml(){
   const list=net.top||[];
@@ -308,8 +331,9 @@ async function saveNick(){
     else toast('Ник записан у вас, в таблицу попадёт при связи');
   }catch(e){
     const err=e&&e.body&&e.body.error;
+    markQuota(e);
     if(err==='nick'){S.nick=prev;save();inp.value=prev||'';toast('Этот ник нельзя использовать, выберите другой')}
-    else if(err==='rate'||e.status===429)toast('Ник можно сменить раз в минуту');
+    else if(err==='rate')toast('Ник можно сменить раз в минуту');
     else toast('Ник записан у вас, в таблицу попадёт при связи');
   }
 }
@@ -339,6 +363,8 @@ if(S.tut==null)S.tut=(fresh||!S.total)?0:1;
 if(S.set.svol==null)S.set.svol=.8;if(S.set.mvol==null)S.set.mvol=.45;if(S.set.tapsnd==null)S.set.tapsnd=1;
 if(!S.pid)S.pid=newPid();
 if(S.refInvited==null)S.refInvited=0;
+let pendingSync='';
+var persistLock=false;
 (function adoptPidGuard(){
   const IDP=['pid','playerId','playerid','player_id','id','player','uid','user','save','data','state'];
   function params(){
@@ -366,14 +392,18 @@ if(S.refInvited==null)S.refInvited=0;
     try{
       const u=new URL(location.href);
       let ch=false;
-      IDP.concat(['ref']).forEach(k=>{if(u.searchParams.has(k)){u.searchParams.delete(k);ch=true}});
-      if(u.hash&&/[?&#](pid|playerId|playerid|player_id|id|player|uid|user|save|data|state|ref)=/i.test(u.hash)){u.hash='';ch=true}
+      IDP.concat(['ref','sync']).forEach(k=>{if(u.searchParams.has(k)){u.searchParams.delete(k);ch=true}});
+      if(u.hash&&/[?&#](pid|playerId|playerid|player_id|id|player|uid|user|save|data|state|ref|sync)=/i.test(u.hash)){u.hash='';ch=true}
       if(ch)history.replaceState(null,'',u.pathname+u.search+u.hash);
     }catch(e){}
   }
   const incoming=params();
   let ref='';
   try{ref=new URLSearchParams(location.search).get('ref')||''}catch(e){}
+  try{
+    const sy=new URLSearchParams(location.search).get('sync')||'';
+    if(/^[A-Za-z0-9_-]{24,80}$/.test(sy))pendingSync=sy;
+  }catch(e){}
   // If this device's playerId was taken from a URL param, keep local progress and mint a new id
   // so we stop writing to someone else's server account. Not destructive to the local save.
   if(S.pid&&fromUrl(S.pid,incoming)&&!S.pidAdoptedFixed){
@@ -387,7 +417,7 @@ if(S.refInvited==null)S.refInvited=0;
       else if(fresh||(!S.total&&!S.taps)){S.pendingRef=ref}
     }
   }catch(e){}
-  save();
+  save({keepTime:true});
   clean();
 })();
 const TITLE='Завхоз церкви';
@@ -1002,7 +1032,7 @@ function renderTutor(){
 }
 function closeTutor(){
   document.body.classList.remove('tut-hl','tut-hl2','tut-hl3');
-  $('#tutor').hidden=true;S.tut=1;save();setTimeout(bootModals,200);setInviteVisible();
+  $('#tutor').hidden=true;S.tut=1;save({keepTime:true});setTimeout(bootModals,200);setTimeout(()=>applyOffline({delay:300}),250);setInviteVisible();
 }
 function bootModals(){
   showVerse();
@@ -1200,7 +1230,7 @@ function nextModal(){
   const m=mq.shift();if(!m){mOpen=false;$('#modal').hidden=true;setInviteVisible();return}
   mOpen=true;$('#mtext').innerHTML=m.html;
   const bx=$('#mbtns');bx.innerHTML='';
-  (m.btns||[{t:'Слава Богу! 🙏'}]).forEach(b=>{const e=document.createElement('button');e.textContent=b.t;if(b.cls)e.className=b.cls;if(b.dis)e.disabled=true;e.onclick=()=>{snd('click');if(b.f&&b.f()===false)return;nextModal()};bx.appendChild(e)});
+  (m.btns||[{t:'Слава Богу! 🙏'}]).forEach(b=>{const e=document.createElement('button');e.textContent=b.t;if(b.cls)e.className=b.cls;if(b.dis)e.disabled=true;e.onclick=()=>{snd('click');const r=b.f&&b.f();if(r===false)return;if(r&&typeof r.then==='function'){e.disabled=true;Promise.resolve(r).then(v=>{if(v!==false)nextModal();else e.disabled=false}).catch(()=>{e.disabled=false;toast('Не получилось')});return}nextModal()};bx.appendChild(e)});
   $('#modal').hidden=false;setInviteVisible();
 }
 // ---------- audio ----------
@@ -1316,8 +1346,22 @@ function playTapClick(){
     const p=a.play();if(p&&p.catch)p.catch(()=>{});
   }catch(e){}
 }
-function save(){S.t=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
-function add(n,noQ){S.d+=n;S.total+=n;S.run+=n;if(!noQ)qProg('earn',n);if(n>0)pwAdd(n)}
+function save(opt){if(persistLock)return;if(!(opt&&opt.keepTime))S.t=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function safeNum(n,d){n=Number(n);return Number.isFinite(n)?n:(d||0)}
+function add(n,noQ){
+  n=safeNum(n);
+  if(!n)return;
+  S.d=safeNum(S.d)+n;S.total=safeNum(S.total)+n;S.run=safeNum(S.run)+n;
+  if(S.d>1e18)S.d=1e18;if(S.total>1e18)S.total=1e18;if(S.run>1e18)S.run=1e18;
+  if(S.d<0)S.d=0;if(S.total<0)S.total=0;if(S.run<0)S.run=0;
+  if(!noQ)qProg('earn',n);if(n>0)pwAdd(n)
+}
+function fmtRate(n){
+  n=safeNum(n);
+  if(n<=0)return '0';
+  if(n<100){const r=Math.round(n*10)/10;return r.toLocaleString('ru-RU',{maximumFractionDigits:1})}
+  return fmt(n);
+}
 // ---------- tap ----------
 function onTap(x,y){
   if(ev&&(ev.type==='fuse'||ev.type==='mic')){ev.got++;float(x,y,ev.type==='fuse'?'⚡':'🎤');vib(8);snd('click');if(ev.got>=ev.need)fixEvent();renderEvent();return}
@@ -1981,7 +2025,7 @@ $('#pclose').onclick=()=>{panel=null;$('#panel').hidden=true;syncTab(null);setIn
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{snd('click');panel===b.dataset.p?$('#pclose').onclick():openP(b.dataset.p)});
 function untilMidnight(){const n=new Date(),m=new Date(n);m.setHours(24,0,0,0);return (m-n)/1000}
 function statsHtml(){
-  return `Время в игре: <b>${fmtT(S.st.play)}</b><br>Всего нажатий: <b>${fmt(S.taps)}</b><br>Лучший доход: <b>${fmt(S.st.best)}</b> дел/сек<br>Добрых дел за всё время: <b>${fmt(S.total)}</b><br>В этом приходе: <b>${fmt(S.run)}</b><br>Новых приходов: <b>${S.st.pr}</b> · благословений: <b>${S.bl}</b><br>Поймано праздников: <b>${S.st.ev}</b><br>Выполнено заданий: <b>${S.st.q}</b><br>Сыграно мини-игр: <b>${mgPlayed()}</b><br>Стихов дня: <b>${S.st.verse||0}</b><br>Достижений: <b>${achProg()}</b>`;
+  return `Время в игре: <b>${fmtT(S.st.play)}</b><br>Всего нажатий: <b>${fmt(S.taps)}</b><br>Лучший доход: <b>${fmtRate(S.st.best)}</b> дел/сек<br>Добрых дел за всё время: <b>${fmt(S.total)}</b><br>В этом приходе: <b>${fmt(S.run)}</b><br>Новых приходов: <b>${S.st.pr}</b> · благословений: <b>${S.bl}</b><br>Поймано праздников: <b>${S.st.ev}</b><br>Выполнено заданий: <b>${S.st.q}</b><br>Сыграно мини-игр: <b>${mgPlayed()}</b><br>Стихов дня: <b>${S.st.verse||0}</b><br>Достижений: <b>${achProg()}</b>`;
 }
 function prestHtml(){
   const g=blessGain();
@@ -2002,7 +2046,7 @@ function renderP(full,opt){
       const el=$('#b_'+x.id),lv=bcnt(x.id),c=bcost(x),lock=k>0&&bcnt(BLD[k-1].id)===0,max=lv>=5;
       el.classList.toggle('lock',lock);el.classList.toggle('max',max&&!lock);
       el.querySelector('.stars').textContent=stars(lv);
-      el.querySelector('.inc').textContent=lv?('+'+fmt(x.ps*lv*blessMul())+' дел/сек · +'+(x.pp*lv)+' прихожан'+bBonus(x,lv)):(lock?'Сначала: '+BLD[k-1].n:'Ещё не построено');
+      el.querySelector('.inc').textContent=lv?('+'+fmtRate(x.ps*lv*blessMul())+' дел/сек · +'+(x.pp*lv)+' прихожан'+bBonus(x,lv)):(lock?'Сначала: '+BLD[k-1].n:'Ещё не построено');
       const bt=el.querySelector('button');
       bt.textContent=max?'Макс':fmt(c);bt.disabled=max||lock||S.d<c;
     });
@@ -2059,6 +2103,11 @@ function renderP(full,opt){
     if(full){
       const tg=(k,n)=>`<button class="tg ${S.set[k]?'on':''}" data-k="${k}">${n}: ${S.set[k]?'вкл':'выкл'}</button>`;
       b.innerHTML=`<div class="nickrow info-nick"><label>Ваш ник <input id="nickIn" maxlength="16" value="${esc(S.nick||defaultNick())}" aria-label="Ник" autocomplete="nickname"></label><button type="button" id="nickSave">Сменить ник</button></div>
+<div class="it col syncbox"><div class="tx"><b>📱 Играть на другом устройстве</b><br>Откройте эту ссылку на телефоне или компьютере, чтобы войти в этот же аккаунт.</div>
+<div class="synclink"><input id="syncIn" readonly value="" placeholder="Сначала создайте ссылку" aria-label="Ссылка для входа с другого устройства"><button type="button" id="syncCopy">Копировать</button></div>
+<p class="syncwarn">Не отправляйте эту ссылку другим — это ваш аккаунт.</p>
+<button type="button" id="syncMake" class="big">Создать ссылку</button>
+<button type="button" id="syncNew">Создать новую ссылку</button></div>
 <button id="shareBtn" class="big">📤 Поделиться игрой</button>
 <div class="it col"><div class="tx"><b>🙏 Новый приход</b><br><span id="prest">${prestHtml()}</span></div><button id="prBtn" class="warn">Начать новый приход</button></div>
 <div class="it col"><div class="tx"><b>⚙️ Настройки</b></div><div class="tgs">${tg('snd','🔊 Звук')}${tg('mus','🎵 Музыка')}${tg('vib','📳 Вибрация')}${tg('tapsnd','🔔 Звук нажатия')}</div>
@@ -2068,7 +2117,7 @@ function renderP(full,opt){
 <div class="it col"><div class="tx"><b>📖 Истории завхоза</b> · ${Math.min(S.loc+1,LOC.length)}/${LOC.length}</div><div class="stl">${LOC.map((l,i)=>i<=S.loc?`<button class="st" data-i="${i}">${i+1}. ${l.n}</button>`:`<button class="st" disabled>${i+1}. 🔒 ???</button>`).join('')}</div></div>
 <div class="it"><div class="tx">Вы — завхоз церкви. Нажимайте на церковь, делайте добрые дела, нанимайте волонтёров и запускайте молодёжку «4.0». К Рождеству и Пасхе церковь наряжается сама, а каждый день вас встречает стих из Писания. Покупайте здания для богослужений и улучшайте их: от молитвенного дома до летнего лагеря.<br><br>Во вкладке «Места» — таблица лучших игроков по добрым делам и счётчик тех, кто играет сейчас. В разделе «Мини-игры» — три испытания по три уровня: уборка в зале, поиск микрофона и помощь бабушке. Каждую игру можно проходить раз в 3 часа. За три звезды сложность растёт, а награда становится больше.<br><br>Каждый день — 3 новых задания с наградой. Ловите праздничные значки на экране: они дают ×7 ко всем делам на 30 секунд. После ${fmt(PR_RUN)} дел можно начать «Новый приход» и получить благословения навсегда.<br><br>Игра сохраняется сама. Пока вас нет, волонтёры трудятся (до 8 часов).<br><br>${VERSES[3]}</div></div>
 <button id="reset" style="background:#7a1f1f;width:100%;margin-top:6px">Стереть всё и начать с нуля</button>`;
-      $('#shareBtn').onclick=share;bindNickUi();
+      $('#shareBtn').onclick=share;bindNickUi();bindSyncUi();
       $('#prBtn').onclick=askPrestige;
       const sv=$('#svol'),mv=$('#mvol');
       if(sv)sv.oninput=()=>{S.set.svol=sv.value/100;S.set.snd=S.set.svol>0?1:0;save()};
@@ -2100,24 +2149,280 @@ function checkAch(){
   ACH.forEach(a=>{if(!S.ach[a.id]&&a.f(S)){S.ach[a.id]=1;toast('🏆 Достижение: '+a.n);if(panel==='ach')renderP(true)}});
   if(panel==='ach')setTitle('ach');
 }
+
+// ---------- cross-device sync (secret ?sync= token, never from ?ref=) ----------
+function newSecret(n){
+  const a=new Uint8Array(n||24);
+  if(crypto&&crypto.getRandomValues)crypto.getRandomValues(a);
+  else for(let i=0;i<a.length;i++)a[i]=Math.floor(Math.random()*256);
+  let bin='';for(let i=0;i<a.length;i++)bin+=String.fromCharCode(a[i]);
+  try{return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'')}catch(e){
+    return (Date.now().toString(36)+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2)+'xxxxxxxxxxxxxxxx').replace(/[^A-Za-z0-9]/g,'').slice(0,32);
+  }
+}
+function validSecret(s){return typeof s==='string'&&/^[A-Za-z0-9_-]{24,80}$/.test(s)}
+function ensureSyncKey(){
+  if(!validSecret(S.syncKey)){S.syncKey=newSecret(32);save({keepTime:true})}
+  return S.syncKey;
+}
+function syncUrl(){return validSecret(S.syncToken)?(URL0+'?sync='+S.syncToken):''}
+function packSave(){
+  S.syncAt=Date.now();
+  let raw;
+  try{raw=JSON.parse(JSON.stringify(S))}catch(e){return null}
+  return raw;
+}
+function saveSig(s){
+  s=s||S;
+  try{
+    const st=s.st&&typeof s.st==='object'?Object.assign({},s.st):s.st;
+    if(st&&typeof st==='object')delete st.play;
+    return JSON.stringify({d:Math.floor(safeNum(s.d)),total:Math.floor(safeNum(s.total)),taps:s.taps,u:s.u,b:s.b,nick:s.nick,bl:s.bl,ach:s.ach,run:s.run,mg:s.mg,q:s.q,st});
+  }catch(e){return ''}
+}
+function sanitizeIncomingSave(src,pid){
+  let o;
+  try{o=JSON.parse(JSON.stringify(src||{}))}catch(e){return null}
+  if(!o||typeof o!=='object')return null;
+  if(pid)o.pid=pid;
+  if(!o.u||typeof o.u!=='object')o.u={};
+  if(!o.b||typeof o.b!=='object')o.b={};
+  if(!o.ach||typeof o.ach!=='object')o.ach={};
+  if(!o.st||typeof o.st!=='object')o.st={play:0,best:0,ev:0,q:0,pr:0};
+  if(!o.set||typeof o.set!=='object')o.set={snd:1,mus:1,vib:1,tapsnd:1,svol:.8,mvol:.45};
+  o.d=Math.max(0,safeNum(o.d));o.total=Math.max(0,safeNum(o.total));o.run=Math.max(0,safeNum(o.run));
+  o.taps=Math.max(0,safeNum(o.taps));
+  o.pidAdoptedFixed=1;
+  return o;
+}
+let syncBusy=false,lastPush=0,lastPushSig='',lastHidePush=0;
+async function issueSyncToken(rotate){
+  ensurePid();ensureSyncKey();
+  try{await netPing()}catch(e){}
+  const packed=packSave();
+  const body={playerId:ensurePid(),syncKey:ensureSyncKey(),rotate:!!rotate,save:packed,syncAt:S.syncAt||Date.now()};
+  let j;
+  async function issueOnce(){
+    return api('/sync/issue',{method:'POST',body:JSON.stringify(body)});
+  }
+  try{
+    j=await issueOnce();
+  }catch(e){
+    const err=e&&e.body&&e.body.error;
+    if(err==='player'){
+      try{await netPing()}catch(err2){}
+      j=await issueOnce();
+    }else if(err==='rate'){
+      await new Promise(r=>setTimeout(r,Math.min(8000,Math.max(500,(e.body&&e.body.retry)||2000))));
+      j=await issueOnce();
+    }else throw e;
+  }
+  if(!j||!j.token||!validSecret(j.token))throw new Error((j&&j.error)||'token');
+  S.syncToken=j.token;save({keepTime:true});
+  try{await syncPush(true)}catch(e){}
+  return j.token;
+}
+async function syncPush(force){
+  if(netQuiet())return;
+  if(!S.syncKey||!S.pid||!validSecret(S.syncKey))return;
+  const now=Date.now();
+  const sig=saveSig();
+  if(sig&&sig===lastPushSig)return;
+  if(!force&&lastPush&&now-lastPush<300000)return;
+  if(force&&lastHidePush&&now-lastHidePush<60000)return;
+  if(syncBusy)return;
+  const packed=packSave();if(!packed)return;
+  syncBusy=true;
+  try{
+    let j,attempt=0;
+    while(attempt<3){
+      try{
+        j=await api('/sync/push',{method:'POST',body:JSON.stringify({playerId:S.pid,syncKey:S.syncKey,syncAt:S.syncAt||now,save:packed,force:!!force})});
+        break;
+      }catch(e){
+        if(markQuota(e))break;
+        const err=e&&e.body&&e.body.error;
+        if((err==='key'||err==='player')&&attempt<2){await new Promise(r=>setTimeout(r,400));attempt++;continue}
+        throw e;
+      }
+    }
+    lastPush=now;
+    if(force)lastHidePush=now;
+    if(j&&j.ok&&!j.older)lastPushSig=sig;
+    if(j&&j.older&&j.save&&safeNum(j.syncAt)>safeNum(S.syncAt)+2000)await applyRemoteSave(j.save,j.playerId||S.pid,j.syncAt);
+  }catch(e){markQuota(e)}
+  finally{syncBusy=false}
+}
+async function syncPullMerge(){
+  if(!S.syncKey||!S.pid||!validSecret(S.syncKey))return false;
+  try{
+    const j=await api('/sync/pull',{method:'POST',body:JSON.stringify({playerId:S.pid,syncKey:S.syncKey})});
+    if(j&&j.ok&&j.save&&safeNum(j.syncAt)>safeNum(S.syncAt)+2000){
+      await applyRemoteSave(j.save,j.playerId||S.pid,j.syncAt);
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+function applyRemoteSave(remote,pid,syncAt){
+  const keepSet=S.set;
+  const next=sanitizeIncomingSave(remote,pid);
+  if(!next)return;
+  const keys=Object.keys(S);
+  keys.forEach(k=>{if(k!=='set')delete S[k]});
+  Object.assign(S,next);
+  if(keepSet)S.set=keepSet;
+  if(syncAt)S.syncAt=syncAt;
+  if(pid)S.pid=pid;
+  S.pidAdoptedFixed=1;
+  save({keepTime:true});
+  try{renderChurch();spawnWalkers();renderInvite();renderLoc();if(panel)renderP(true);$('#deeds').textContent=fmt(S.d);$('#dps').textContent=fmtRate(ps());$('#dpt').textContent=fmtRate(tapVal());$('#people').textContent=fmt(people(S))}catch(e){}
+}
+async function resumeSync(){
+  if(pendingSync)return;
+  try{if(S.syncKey)await syncPullMerge()}catch(e){markQuota(e)}
+  applyOffline({delay:400});
+  if(S.syncKey)syncPush(false);
+}
+async function askSyncLoad(){
+  const tok=pendingSync;
+  if(!validSecret(tok)){pendingSync='';applyOffline({delay:300});return}
+  try{
+    const j=await api('/sync/info?token='+encodeURIComponent(tok));
+    if(!j||!j.ok)throw new Error('token');
+    const nick=esc(j.nick||'Завхоз');
+    modal('📱 <b>Загрузить аккаунт «'+nick+'»?</b><br>Текущий прогресс на этом устройстве будет заменён.',
+      [{t:'Загрузить',f:()=>doSyncPull(tok)},{t:'Отмена',cls:'ghost',f:()=>{pendingSync='';applyOffline({delay:200})}}]);
+  }catch(e){
+    pendingSync='';
+    if(isQuotaErr(e)||markQuota(e))toast('Сейчас не получается, попробуйте позже');
+    else toast('Ссылка для входа недействительна или устарела');
+    applyOffline({delay:200});
+  }
+}
+async function doSyncPull(tok){
+  try{
+    const j=await api('/sync/pull',{method:'POST',body:JSON.stringify({token:tok})});
+    if(!j||!j.ok||!j.save||!j.playerId){toast('Не удалось загрузить аккаунт');return false}
+    const keepSet=S.set;
+    const next=sanitizeIncomingSave(j.save,j.playerId);
+    if(!next){toast('Не удалось загрузить аккаунт');return false}
+    if(keepSet)next.set=keepSet;
+    next.pid=j.playerId;
+    next.pidAdoptedFixed=1;
+    if(j.syncAt)next.syncAt=j.syncAt;
+    persistLock=true;
+    pendingSync='';
+    Object.keys(S).forEach(k=>delete S[k]);
+    Object.assign(S,next);
+    try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){persistLock=false;toast('Не удалось сохранить аккаунт');return false}
+    location.reload();
+    return false;
+  }catch(e){
+    persistLock=false;
+    if(isQuotaErr(e)||markQuota(e))toast('Сейчас не получается, попробуйте позже');
+    else toast('Не удалось загрузить аккаунт');
+    return false;
+  }
+}
+function fillSyncUi(){
+  const inp=$('#syncIn');if(!inp)return;
+  const url=syncUrl();
+  inp.value=url;
+  const mk=$('#syncMake'),nw=$('#syncNew');
+  if(mk)mk.hidden=!!url;
+  if(nw)nw.hidden=!url;
+}
+async function onIssueSync(rotate){
+  try{
+    if(rotate&&S.syncToken&&!confirm('Старая ссылка перестанет работать. Создать новую?'))return;
+    toast(rotate?'Создаю новую ссылку…':'Создаю ссылку…');
+    await issueSyncToken(true);
+    fillSyncUi();
+    toast('Ссылка готова. Не отправляйте её другим.');
+  }catch(e){
+    const err=e&&e.body&&e.body.error;
+    markQuota(e);
+    if(err==='rate')toast('Подождите немного и нажмите ещё раз');
+    else if(isQuotaErr(e))toast('Сейчас не получается, попробуйте позже');
+    else toast('Не удалось создать ссылку. Проверьте интернет.');
+  }
+}
+function bindSyncUi(){
+  fillSyncUi();
+  const cp=$('#syncCopy');
+  if(cp)cp.onclick=async()=>{
+    snd('click');
+    const url=syncUrl()||($('#syncIn')&&$('#syncIn').value)||'';
+    if(!url){toast('Сначала создайте ссылку');return}
+    try{
+      if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(url);
+      else{const inp=$('#syncIn');if(inp){inp.focus();inp.select();document.execCommand('copy')}}
+      toast('Ссылка скопирована. Не отправляйте её другим.');
+    }catch(e){toast('Скопируйте ссылку вручную')}
+  };
+  const mk=$('#syncMake');if(mk)mk.onclick=()=>{snd('click');onIssueSync(false)};
+  const nw=$('#syncNew');if(nw)nw.onclick=()=>{snd('click');onIssueSync(true)};
+}
+
 // ---------- offline («Пока вас не было») ----------
 const DBL_CD=4*3600*1000;
+const OFF_CAP=8*3600;
+const OFF_POPUP_SEC=30;
+let offModalQueued=false;
+function lastAccounted(){
+  const t=safeNum(S.t);
+  const now=Date.now();
+  if(!t||t<=0||t>now+60000)return now;
+  return t;
+}
+function offGainFor(dt){
+  dt=Math.min(OFF_CAP,Math.max(0,safeNum(dt)));
+  const rate=Math.max(0,safeNum(psBase())*safeNum(offRate()));
+  const g=Math.floor(rate*dt);
+  return Number.isFinite(g)&&g>0?g:0;
+}
 function offlineModal(g){
+  g=Math.floor(safeNum(g));
+  if(g<=0)return;
   const canD=Date.now()-(S.dblT||0)>=DBL_CD;
   const wait=Math.ceil((DBL_CD-(Date.now()-(S.dblT||0)))/60000);
-  modal('👋 <b>Пока вас не было</b><br>волонтёры сделали<br><span class="big-n">'+fmt(g)+'</span><br>добрых дел.'+(canD?'':'<br><small>Удвоить можно раз в 4 часа (через '+(wait>=60?Math.floor(wait/60)+' ч '+(wait%60)+' мин':wait+' мин')+').</small>'),
+  modal('👋 <b>Пока вас не было: +'+fmt(g)+' дел</b><br>волонтёры сделали<br><span class="big-n">+'+fmt(g)+'</span><br>добрых дел.'+(canD?'':'<br><small>Удвоить можно раз в 4 часа (через '+(wait>=60?Math.floor(wait/60)+' ч '+(wait%60)+' мин':wait+' мин')+').</small>'),
    [{t:'✨ Удвоить ×2',dis:!canD,f:()=>{S.dblT=Date.now();claimOff(g*2)}},{t:'Забрать',cls:'ghost',f:()=>claimOff(g)}]);
 }
-function claimOff(n){add(n,true);S.offPend=0;S.offN=(S.offN||0)+1;toast('+'+fmt(n)+' добрых дел');snd('buy');save()}
-(function(){
-  const dt=Math.min(8*3600,(Date.now()-(S.t||Date.now()))/1000);
-  let g=Math.floor(psBase()*dt*offRate());if(dt<=30)g=0;
-  g+=S.offPend||0;
-  if(g>0){S.offPend=g;setTimeout(()=>offlineModal(g),1400)}
-})();
+function claimOff(n){add(n,true);S.offPend=0;offModalQueued=false;S.offN=(S.offN||0)+1;toast('+'+fmt(n)+' добрых дел');snd('buy');save();syncPush(true)}
+function showOffModal(g,delay){
+  g=Math.floor(safeNum(g));
+  if(g<=0||offModalQueued)return;
+  offModalQueued=true;
+  const go=()=>offlineModal(g);
+  if(delay>0)setTimeout(go,delay);else go();
+}
+function applyOffline(opt){
+  opt=opt||{};
+  if(pendingSync)return 0;
+  const now=Date.now();
+  const prev=lastAccounted();
+  const dt=Math.min(OFF_CAP,Math.max(0,(now-prev)/1000));
+  S.t=now;
+  if(typeof last==='number')last=performance.now();
+  let fresh=0;
+  if(dt>1)fresh=offGainFor(dt);
+  if(dt<=OFF_POPUP_SEC){
+    if(fresh>0)add(fresh,true);
+    save({keepTime:true});
+    if(S.offPend>0)showOffModal(S.offPend,opt.delay||0);
+    return fresh;
+  }
+  const g=fresh+safeNum(S.offPend);
+  if(g>0){S.offPend=g;save({keepTime:true});showOffModal(g,opt.delay==null?400:opt.delay)}
+  else save({keepTime:true});
+  return g;
+}
 // ---------- loop ----------
 qCheckDay();
 let last=performance.now(),acc=0,evTimer=Date.now()+45000;
+if(!pendingSync&&S.tut)applyOffline({delay:800});
 function frame(now){
   const dt=Math.min(1,(now-last)/1000);last=now;add(ps()*dt);
   if(!document.hidden)S.st.play+=dt;
@@ -2132,7 +2437,7 @@ function frame(now){
   acc+=dt;
   $('#deeds').textContent=fmt(S.d);
   if(acc>.25){acc=0;const p=ps();if(p>S.st.best)S.st.best=p;
-    $('#dps').textContent=fmt(p);$('#dpt').textContent=fmt(tapVal());$('#people').textContent=fmt(people(S));
+    $('#dps').textContent=fmtRate(p);$('#dpt').textContent=fmtRate(tapVal());$('#people').textContent=fmt(people(S));
     const bl=$('#blessS');bl.hidden=!S.bl;$('#bless').textContent=S.bl;
     qCheckDay();$('#qdot').hidden=!qReady();$('#mgdot').hidden=!mgAnyReady();
     renderLoc();renderChurch();renderBoost();if(panel)renderP();if(ev)renderEvent();checkAch()}
@@ -2150,10 +2455,22 @@ try{ensureBgm();ensureTapAud()}catch(e){}
 renderInvite();
 if(!S.tut)setTimeout(showTutor,350);
 else setTimeout(bootModals,400);
+if(pendingSync)setTimeout(askSyncLoad,500);
 requestAnimationFrame(frame);
 setInterval(save,5000);
-document.addEventListener('visibilitychange',()=>{if(document.hidden){save();if(AC)try{AC.suspend()}catch(e){};if(bgm)try{bgm.pause()}catch(e){}}else resumeAudio()});
-window.addEventListener('pageshow',resumeAudio);
-window.addEventListener('pagehide',save);
+setInterval(()=>syncPush(false),300000);
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){
+    save();
+    syncPush(true);
+    if(AC)try{AC.suspend()}catch(e){};
+    if(bgm)try{bgm.pause()}catch(e){};
+  }else{
+    resumeSync();
+    resumeAudio();
+  }
+});
+window.addEventListener('pageshow',()=>{resumeAudio();if(!document.hidden)resumeSync()});
+window.addEventListener('pagehide',()=>{save();syncPush(true)});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-window.__game={S,TITLE,API,net,startEvent,openP,spawnBadge,offlineModal,showStory,askPrestige,startMini,closeMini,showTutor,showVerse,showSeasonBonus,applySeason,makeShareCard,pwEnsure,setTime,startRain,stopRain,showZavhoz,spawnEgg,ringBell,spawnWalkers,tickWalkers,setWalkN:n=>{walkForceN=n==null?null:n;spawnWalkers()},getWalkers:()=>walkers.map(w=>({x:w.x,y:w.y,state:w.state,t:w.t,kind:w.kind,item:w.item,op:w.op,side:w.side})),netPing,netScore,netTop,netMeAndClaim,ensurePid,ensureNick,cleanNickClient,saveNick,netNick,refCode,inviteUrl,openInvite,closeInvite,shareInvite,unlockAudio,getAudio:()=>({ac:AC&&AC.state,unlocked:audioUnlocked,bgm:!!(bgm&&!bgm.paused),bgmSrc:bgm&&bgm.src}),get ev(){return ev},get badge(){return badge},get mini(){return mini},get season(){return season}};
+window.__game={S,TITLE,API,net,startEvent,openP,spawnBadge,offlineModal,applyOffline,showStory,askPrestige,startMini,closeMini,showTutor,showVerse,showSeasonBonus,applySeason,makeShareCard,pwEnsure,setTime,startRain,stopRain,showZavhoz,spawnEgg,ringBell,spawnWalkers,tickWalkers,setWalkN:n=>{walkForceN=n==null?null:n;spawnWalkers()},getWalkers:()=>walkers.map(w=>({x:w.x,y:w.y,state:w.state,t:w.t,kind:w.kind,item:w.item,op:w.op,side:w.side})),netPing,netScore,netTop,netMeAndClaim,ensurePid,ensureNick,cleanNickClient,saveNick,netNick,refCode,inviteUrl,openInvite,closeInvite,shareInvite,unlockAudio,getAudio:()=>({ac:AC&&AC.state,unlocked:audioUnlocked,bgm:!!(bgm&&!bgm.paused),bgmSrc:bgm&&bgm.src}),syncUrl,issueSyncToken,syncPush,syncPullMerge,askSyncLoad,get pendingSync(){return pendingSync},get ev(){return ev},get badge(){return badge},get mini(){return mini},get season(){return season}};
